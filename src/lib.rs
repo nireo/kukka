@@ -21,7 +21,7 @@ where
     }
 }
 
-fn char_parser(expected: char) -> impl Fn(&str) -> ParseResult<char> {
+pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     move |input: &str| {
         let mut chars = input.char_indices();
         match chars.next() {
@@ -34,7 +34,7 @@ fn char_parser(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     }
 }
 
-fn string_parser(expected: &'static str) -> impl Fn(&str) -> ParseResult<&str> {
+pub fn string(expected: &'static str) -> impl Fn(&str) -> ParseResult<&str> {
     move |input: &str| {
         if input.starts_with(expected) {
             Ok((&input[expected.len()..], &input[..expected.len()]))
@@ -44,7 +44,7 @@ fn string_parser(expected: &'static str) -> impl Fn(&str) -> ParseResult<&str> {
     }
 }
 
-fn seq<P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(&str) -> ParseResult<(O1, O2)>
+pub fn seq<P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(&str) -> ParseResult<(O1, O2)>
 where
     P1: Fn(&str) -> ParseResult<O1>,
     P2: Fn(&str) -> ParseResult<O2>,
@@ -53,5 +53,344 @@ where
         let (rest, r1) = p1(input)?;
         let (rest, r2) = p2(rest)?;
         Ok((rest, (r1, r2)))
+    }
+}
+
+pub fn alt<P1, P2, O>(p1: P1, p2: P2) -> impl Fn(&str) -> ParseResult<O>
+where
+    P1: Fn(&str) -> ParseResult<O>,
+    P2: Fn(&str) -> ParseResult<O>,
+{
+    move |input: &str| p1(input).or_else(|_| p2(input))
+}
+
+pub fn many<'a, P, O>(parser: P) -> impl Parser<'a, Vec<O>>
+where
+    P: Parser<'a, O>,
+{
+    move |mut input: Input<'a>| {
+        let mut res = Vec::new();
+
+        loop {
+            match parser.parse(input) {
+                Ok((rest, result)) => {
+                    res.push(result);
+                    input = rest;
+                }
+                Err(_) => break,
+            }
+        }
+
+        Ok((input, res))
+    }
+}
+
+pub fn separated<'a, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Parser<'a, Vec<O1>>
+where
+    P1: Parser<'a, O1>,
+    P2: Parser<'a, O2>,
+{
+    move |mut input: Input<'a>| {
+        let mut res = Vec::new();
+
+        match p1.parse(input) {
+            Ok((rest, result)) => {
+                res.push(result);
+                input = rest;
+            }
+            Err(_) => {
+                return Ok((input, res));
+            }
+        }
+
+        loop {
+            match p2.parse(input) {
+                Ok((rest, _)) => {
+                    input = rest;
+                    match p1.parse(input) {
+                        Ok((rest, result)) => {
+                            res.push(result);
+                            input = rest;
+                        }
+                        Err(_) => {
+                            return Err("expected element after separator");
+                        }
+                    }
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+        }
+        Ok((input, res))
+    }
+}
+
+pub fn separated1<'a, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Parser<'a, Vec<O1>>
+where
+    P1: Parser<'a, O1>,
+    P2: Parser<'a, O2>,
+{
+    move |mut input: Input<'a>| {
+        let mut res = Vec::new();
+        let (rest, result) = p1.parse(input)?;
+        res.push(result);
+        input = rest;
+
+        loop {
+            match p2.parse(input) {
+                Ok((rest, _)) => {
+                    input = rest;
+                    match p1.parse(input) {
+                        Ok((rest, result)) => {
+                            res.push(result);
+                            input = rest;
+                        }
+                        Err(_) => {
+                            return Err("expected element after separator");
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        Ok((input, res))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_char_success() {
+        let parser = char('a');
+        let result = parser("abc");
+        assert_eq!(result, Ok(("bc", 'a')));
+    }
+
+    #[test]
+    fn test_char_failure() {
+        let parser = char('a');
+        let result = parser("bc");
+        assert_eq!(result, Err("char mismatch"));
+    }
+
+    #[test]
+    fn test_char_empty_input() {
+        let parser = char('a');
+        let result = parser("");
+        assert_eq!(result, Err("char mismatch"));
+    }
+
+    #[test]
+    fn test_char_single_char() {
+        let parser = char('x');
+        let result = parser("x");
+        assert_eq!(result, Ok(("", 'x')));
+    }
+
+    #[test]
+    fn test_char_unicode() {
+        let parser = char('ñ');
+        let result = parser("ñoño");
+        assert_eq!(result, Ok(("oño", 'ñ')));
+    }
+
+    #[test]
+    fn test_string_success() {
+        let parser = string("hello");
+        let result = parser("hello world");
+        assert_eq!(result, Ok((" world", "hello")));
+    }
+
+    #[test]
+    fn test_string_failure() {
+        let parser = string("hello");
+        let result = parser("hi world");
+        assert_eq!(result, Err("string mismatch"));
+    }
+
+    #[test]
+    fn test_string_exact_match() {
+        let parser = string("test");
+        let result = parser("test");
+        assert_eq!(result, Ok(("", "test")));
+    }
+
+    #[test]
+    fn test_string_partial_match() {
+        let parser = string("hello");
+        let result = parser("hell");
+        assert_eq!(result, Err("string mismatch"));
+    }
+
+    #[test]
+    fn test_string_empty_string() {
+        let parser = string("");
+        let result = parser("anything");
+        assert_eq!(result, Ok(("anything", "")));
+    }
+
+    #[test]
+    fn test_seq_success() {
+        let p1 = char('a');
+        let p2 = char('b');
+        let parser = seq(p1, p2);
+        let result = parser("abc");
+        assert_eq!(result, Ok(("c", ('a', 'b'))));
+    }
+
+    #[test]
+    fn test_seq_first_fails() {
+        let p1 = char('a');
+        let p2 = char('b');
+        let parser = seq(p1, p2);
+        let result = parser("xbc");
+        assert_eq!(result, Err("char mismatch"));
+    }
+
+    #[test]
+    fn test_seq_second_fails() {
+        let p1 = char('a');
+        let p2 = char('b');
+        let parser = seq(p1, p2);
+        let result = parser("axc");
+        assert_eq!(result, Err("char mismatch"));
+    }
+
+    #[test]
+    fn test_alt_first_succeeds() {
+        let p1 = char('a');
+        let p2 = char('b');
+        let parser = alt(p1, p2);
+        let result = parser("abc");
+        assert_eq!(result, Ok(("bc", 'a')));
+    }
+
+    #[test]
+    fn test_alt_second_succeeds() {
+        let p1 = char('a');
+        let p2 = char('b');
+        let parser = alt(p1, p2);
+        let result = parser("bac");
+        assert_eq!(result, Ok(("ac", 'b')));
+    }
+
+    #[test]
+    fn test_alt_both_fail() {
+        let p1 = char('a');
+        let p2 = char('b');
+        let parser = alt(p1, p2);
+        let result = parser("cde");
+        assert_eq!(result, Err("char mismatch"));
+    }
+
+    #[test]
+    fn test_many_empty_input() {
+        let char_a = char('a');
+        let parser = many(char_a);
+        let result = parser.parse("");
+        assert_eq!(result, Ok(("", vec![])));
+    }
+
+    #[test]
+    fn test_many_no_matches() {
+        let char_a = char('a');
+        let parser = many(char_a);
+        let result = parser.parse("bcde");
+        assert_eq!(result, Ok(("bcde", vec![])));
+    }
+
+    #[test]
+    fn test_many_single_match() {
+        let char_a = char('a');
+        let parser = many(char_a);
+        let result = parser.parse("abc");
+        assert_eq!(result, Ok(("bc", vec!['a'])));
+    }
+
+    #[test]
+    fn test_many_multiple_matches() {
+        let char_a = char('a');
+        let parser = many(char_a);
+        let result = parser.parse("aaabcd");
+        assert_eq!(result, Ok(("bcd", vec!['a', 'a', 'a'])));
+    }
+
+    #[test]
+    fn test_many_consumes_all() {
+        let char_a = char('a');
+        let parser = many(char_a);
+        let result = parser.parse("aaaa");
+        assert_eq!(result, Ok(("", vec!['a', 'a', 'a', 'a'])));
+    }
+
+    #[test]
+    fn test_many_with_string() {
+        let hello_parser = string("hello");
+        let parser = many(hello_parser);
+        let result = parser.parse("hellohellohello world");
+        assert_eq!(result, Ok((" world", vec!["hello", "hello", "hello"])));
+    }
+
+    #[test]
+    fn test_separated_empty() {
+        let digit = char('1');
+        let comma = char(',');
+        let parser = separated(digit, comma);
+
+        let result = parser.parse("abc");
+        assert_eq!(result, Ok(("abc", vec![])));
+    }
+
+    #[test]
+    fn test_separated_single_element() {
+        let digit = char('1');
+        let comma = char(',');
+        let parser = separated(digit, comma);
+
+        let result = parser.parse("1abc");
+        assert_eq!(result, Ok(("abc", vec!['1'])));
+    }
+
+    #[test]
+    fn test_separated_multiple_elements() {
+        let digit = char('1');
+        let comma = char(',');
+        let parser = separated(digit, comma);
+
+        let result = parser.parse("1,1,1abc");
+        assert_eq!(result, Ok(("abc", vec!['1', '1', '1'])));
+    }
+
+    #[test]
+    fn test_separated_trailing_separator_error() {
+        let digit = char('1');
+        let comma = char(',');
+        let parser = separated(digit, comma);
+
+        let result = parser.parse("1,1,");
+        assert_eq!(result, Err("expected element after separator"));
+    }
+
+    #[test]
+    fn test_separated1_requires_one_element() {
+        let digit = char('1');
+        let comma = char(',');
+        let parser = separated1(digit, comma);
+
+        let result = parser.parse("abc");
+        assert_eq!(result, Err("char mismatch"));
+    }
+
+    #[test]
+    fn test_separated1_success() {
+        let digit = char('1');
+        let comma = char(',');
+        let parser = separated1(digit, comma);
+
+        let result = parser.parse("1,1,1abc");
+        assert_eq!(result, Ok(("abc", vec!['1', '1', '1'])));
     }
 }
