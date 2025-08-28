@@ -66,6 +66,16 @@ pub fn take_until(target: char) -> impl Fn(&str) -> ParseResult<&str> {
     }
 }
 
+pub fn comma() -> impl Fn(&str) -> ParseResult<char> {
+    move |input: &str| {
+        if input.as_bytes().first() == Some(&b',') {
+            Ok((&input[1..], ','))
+        } else {
+            Err("expected comma")
+        }
+    }
+}
+
 pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     move |input: &str| {
         let mut chars = input.char_indices();
