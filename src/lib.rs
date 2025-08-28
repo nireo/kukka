@@ -21,6 +21,51 @@ where
     }
 }
 
+pub fn ws<'a, P, O>(p: P) -> impl Parser<'a, O>
+where
+    P: Parser<'a, O>,
+{
+    move |input: Input<'a>| {
+        let trimmed = input.trim_start_matches([' ', '\t']);
+        p.parse(trimmed)
+    }
+}
+
+pub fn opt<'a, P, O>(p: P) -> impl Parser<'a, Option<O>>
+where
+    P: Parser<'a, O>,
+{
+    move |input: Input<'a>| match p.parse(input) {
+        Ok((rest, res)) => Ok((rest, Some(res))),
+        Err(_) => Ok((input, None)),
+    }
+}
+
+pub fn take_while<F>(p: F) -> impl Fn(&str) -> ParseResult<&str>
+where
+    F: Fn(char) -> bool,
+{
+    move |input: &str| {
+        let end_pos = input
+            .char_indices()
+            .find(|(_, c)| !p(*c))
+            .map(|(pos, _)| pos)
+            .unwrap_or(input.len());
+        Ok((&input[end_pos..], &input[..end_pos]))
+    }
+}
+
+pub fn take_until(target: char) -> impl Fn(&str) -> ParseResult<&str> {
+    move |input: &str| {
+        let end_pos = input
+            .char_indices()
+            .find(|(_, c)| *c == target)
+            .map(|(pos, _)| pos)
+            .unwrap_or(input.len());
+        Ok((&input[end_pos..], &input[..end_pos]))
+    }
+}
+
 pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     move |input: &str| {
         let mut chars = input.char_indices();
@@ -82,6 +127,44 @@ where
         }
 
         Ok((input, res))
+    }
+}
+
+pub fn map<'a, P, O1, O2, F>(parser: P, f: F) -> impl Parser<'a, O2>
+where
+    P: Parser<'a, O1>,
+    F: Fn(O1) -> O2,
+{
+    move |input: Input<'a>| {
+        let (rest, result) = parser.parse(input)?;
+        Ok((rest, f(result)))
+    }
+}
+
+pub fn many1<'a, P, O>(parser: P) -> impl Parser<'a, Vec<O>>
+where
+    P: Parser<'a, O>,
+{
+    move |mut input: Input<'a>| {
+        let mut res = Vec::new();
+        match parser.parse(input) {
+            Ok((rest, result)) => {
+                res.push(result);
+
+                loop {
+                    match parser.parse(rest) {
+                        Ok((rest, result)) => {
+                            res.push(result);
+                            input = rest;
+                        }
+                        Err(_) => break,
+                    }
+                }
+
+                Ok((input, res))
+            }
+            Err(_) => Err("could not parse once"),
+        }
     }
 }
 
