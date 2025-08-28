@@ -486,4 +486,18 @@ mod tests {
         let result = parser.parse("1,1,1abc");
         assert_eq!(result, Ok(("abc", vec!['1', '1', '1'])));
     }
+
+    #[test]
+    fn test_ws() {
+        let parser = ws(char('a'));
+        let result = parser.parse("   abc");
+        assert_eq!(result, Ok(("bc", 'a')));
+    }
+
+    #[test]
+    fn test_ws_no_whitespace() {
+        let parser = ws(char('a'));
+        let result = parser.parse("abc");
+        assert_eq!(result, Ok(("bc", 'a')));
+    }
 }
