@@ -41,6 +41,42 @@ where
     }
 }
 
+/// Tries to apply the parser `p`. If it fails, it returns the provided default value without
+/// consuming any input. This will clone the default value. TODO: avoid cloning if possible.
+pub fn or_default<'a, P, O>(p: P, default: O) -> impl Parser<'a, O>
+where
+    P: Parser<'a, O>,
+    O: Clone,
+{
+    move |input: Input<'a>| match p.parse(input) {
+        Ok((rest, res)) => Ok((rest, res)),
+        Err(_) => Ok((input, default.clone())),
+    }
+}
+
+pub fn or<'a, P1, P2, O>(p1: P1, p2: P2) -> impl Parser<'a, O>
+where
+    P1: Parser<'a, O>,
+    P2: Parser<'a, O>,
+{
+    move |input: Input<'a>| match p1.parse(input) {
+        Ok((rest, res)) => Ok((rest, res)),
+        Err(_) => p2.parse(input),
+    }
+}
+
+pub fn and<'a, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Parser<'a, (O1, O2)>
+where
+    P1: Parser<'a, O1>,
+    P2: Parser<'a, O2>,
+{
+    move |input: Input<'a>| {
+        let (rest, r1) = p1.parse(input)?;
+        let (rest, r2) = p2.parse(rest)?;
+        Ok((rest, (r1, r2)))
+    }
+}
+
 pub fn take_while<F>(p: F) -> impl Fn(&str) -> ParseResult<&str>
 where
     F: Fn(char) -> bool,
