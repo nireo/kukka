@@ -134,13 +134,10 @@ pub fn comma() -> impl Fn(&str) -> ParseResult<char> {
 
 pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     move |input: &str| {
-        let mut chars = input.char_indices();
-        match chars.next() {
-            Some((_, c)) if c == expected => {
-                let next_pos = chars.next().map(|(pos, _)| pos).unwrap_or(input.len());
-                Ok((&input[next_pos..], c))
-            }
-            _ => Err("char mismatch"),
+        if input.as_bytes().first() == Some(&(expected as u8)) {
+            return Ok((&input[1..], expected));
+        } else {
+            return Err("char mismatch");
         }
     }
 }
