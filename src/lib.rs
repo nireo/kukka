@@ -21,13 +21,18 @@ where
     }
 }
 
-pub fn ws<'a, P, O>(p: P) -> impl Parser<'a, O>
-where
-    P: Parser<'a, O>,
-{
-    move |input: Input<'a>| {
-        let trimmed = input.trim_start_matches([' ', '\t']);
-        p.parse(trimmed)
+pub fn multispace0() -> impl Fn(&str) -> ParseResult<&str> {
+    take_while(|c| c.is_whitespace())
+}
+
+pub fn multispace1() -> impl Fn(&str) -> ParseResult<&str> {
+    move |input: &str| {
+        let (rest, matched) = multispace0()(input)?;
+        if matched.is_empty() {
+            Err("expected at least one whitespace character")
+        } else {
+            Ok((rest, matched))
+        }
     }
 }
 
@@ -270,10 +275,28 @@ where
     }
 }
 
-/// deliminated requires that all three parsers pass, but it returns the value from the second
+pub fn integer() -> impl Fn(&str) -> ParseResult<i64> {
+    move |input: &str| {
+        let (rest, digits) = digit01()(input)?;
+        if digits.is_empty() {
+            return Err("expected at least one digit");
+        }
+
+        match digits.parse::<i64>() {
+            Ok(num) => Ok((rest, num)),
+            Err(_) => Err("failed to parse integer"),
+        }
+    }
+}
+
+pub fn digit01() -> impl Fn(&str) -> ParseResult<&str> {
+    take_while(|c| c.is_ascii_digit())
+}
+
+/// delimited requires that all three parsers pass, but it returns the value from the second
 /// function this is especially useful for example reading the content of a string which is
 /// surrounded by "" and then being able to map to that value
-pub fn deliminated<'a, P1, P2, P3, O1, O2, O3>(
+pub fn delimited<'a, P1, P2, P3, O1, O2, O3>(
     first_delim: P1,
     inner: P2,
     second_delim: P3,
@@ -288,6 +311,24 @@ where
         let (rest, out) = inner.parse(rest)?;
         let (rest, _) = second_delim.parse(rest)?;
         Ok((rest, out))
+    }
+}
+
+pub fn separated_pair<'a, P1, P2, P3, O1, O2, O3>(
+    p1: P1,
+    p2: P2,
+    p3: P3,
+) -> impl Parser<'a, (O1, O3)>
+where
+    P1: Parser<'a, O1>,
+    P2: Parser<'a, O2>,
+    P3: Parser<'a, O3>,
+{
+    move |input: Input<'a>| {
+        let (rest, out1) = p1.parse(input)?;
+        let (rest, _) = p2.parse(rest)?;
+        let (rest, out3) = p3.parse(rest)?;
+        Ok((rest, (out1, out3)))
     }
 }
 
@@ -557,19 +598,5 @@ mod tests {
 
         let result = parser.parse("1,1,1abc");
         assert_eq!(result, Ok(("abc", vec!['1', '1', '1'])));
-    }
-
-    #[test]
-    fn test_ws() {
-        let parser = ws(char('a'));
-        let result = parser.parse("   abc");
-        assert_eq!(result, Ok(("bc", 'a')));
-    }
-
-    #[test]
-    fn test_ws_no_whitespace() {
-        let parser = ws(char('a'));
-        let result = parser.parse("abc");
-        assert_eq!(result, Ok(("bc", 'a')));
     }
 }
