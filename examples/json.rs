@@ -1,11 +1,11 @@
 use kukka::*;
 use std::{collections::HashMap, error::Error, fs, iter::Map};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 enum Node<'a> {
     Null,
     Boolean(bool),
-    Number(f64),
+    Number(i64),
     String(&'a str),
 
     // since we are using the hashmap the actual order of the objects is not preserved.
@@ -25,6 +25,71 @@ fn parse_null(data: &str) -> ParseResult<Node> {
     value(string("null"), Node::Null).parse(data)
 }
 
+fn parse_string_inner(data: &str) -> ParseResult<&str> {
+    delimited(char('"'), take_while(|c| c != '"'), char('"')).parse(data)
+}
+
+fn parse_string(data: &str) -> ParseResult<Node> {
+    map(parse_string_inner, |s| Node::String(s)).parse(data)
+}
+
+fn parse_object(json: &str) -> ParseResult<Node> {
+    map(
+        delimited(
+            char('{'),
+            separated(
+                separated_pair(
+                    delimited(multispace0(), parse_string_inner, multispace0()),
+                    char(':'),
+                    delimited(multispace0(), parse_json, multispace0()),
+                ),
+                char(','),
+            ),
+            char('}'),
+        ),
+        |v| Node::Object(Box::new(v.into_iter().collect())),
+    )
+    .parse(json)
+}
+
+fn parse_array(json: &str) -> ParseResult<Node> {
+    map(
+        delimited(
+            char('['),
+            separated(
+                parse_json,
+                delimited(multispace0(), char(','), multispace0()),
+            ),
+            char(']'),
+        ),
+        |val| Node::Array(val),
+    )
+    .parse(json)
+}
+
+fn parse_number(data: &str) -> ParseResult<Node> {
+    map(integer(), |n| Node::Number(n)).parse(data)
+}
+
+fn parse_json(data: &str) -> ParseResult<Node> {
+    // TODO: yeah this sucks
+    delimited(
+        multispace0(),
+        or(
+            parse_null,
+            or(
+                parse_boolean,
+                or(
+                    parse_string,
+                    or(parse_object, or(parse_array, parse_number)),
+                ),
+            ),
+        ),
+        multispace0(),
+    )
+    .parse(data)
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
 
@@ -36,6 +101,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let path = &args[1];
     let content = fs::read_to_string(path)?;
     println!("{}", content);
+
+    let res = parse_json(&content)?;
+    println!("{:?}", res);
 
     Ok(())
 }
