@@ -41,6 +41,21 @@ where
     }
 }
 
+/// Value returns a given value given to the function if the parser is successful, think of it as a
+/// more ergonomic 'map'
+///
+/// TODO: prevent cloning here.
+pub fn value<'a, P, V, O>(p: P, val: V) -> impl Parser<'a, V>
+where
+    P: Parser<'a, O>,
+    V: Clone,
+{
+    move |input: Input<'a>| match p.parse(input) {
+        Ok((rest, _)) => Ok((rest, val.clone())),
+        Err(_) => Err("didnt match value parser"),
+    }
+}
+
 /// Tries to apply the parser `p`. If it fails, it returns the provided default value without
 /// consuming any input. This will clone the default value. TODO: avoid cloning if possible.
 pub fn or_default<'a, P, O>(p: P, default: O) -> impl Parser<'a, O>
@@ -252,6 +267,27 @@ where
             }
         }
         Ok((input, res))
+    }
+}
+
+/// deliminated requires that all three parsers pass, but it returns the value from the second
+/// function this is especially useful for example reading the content of a string which is
+/// surrounded by "" and then being able to map to that value
+pub fn deliminated<'a, P1, P2, P3, O1, O2, O3>(
+    first_delim: P1,
+    inner: P2,
+    second_delim: P3,
+) -> impl Parser<'a, O2>
+where
+    P1: Parser<'a, O1>,
+    P2: Parser<'a, O2>,
+    P3: Parser<'a, O3>,
+{
+    move |input: Input<'a>| {
+        let (rest, _) = first_delim.parse(input)?;
+        let (rest, out) = inner.parse(rest)?;
+        let (rest, _) = second_delim.parse(rest)?;
+        Ok((rest, out))
     }
 }
 

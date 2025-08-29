@@ -9,6 +9,10 @@ Kukka is a small parser combinator library for Rust, inspired by nom. It provide
 - No trait object overhead
 - Simple and easy to use
 
+## TODO
+
+- There are some clones in the library which most likely aren't necessary, still need to check those.
+
 ## Example
 
 ```rust
