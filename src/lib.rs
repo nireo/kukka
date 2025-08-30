@@ -43,7 +43,7 @@ pub fn multispace0() -> impl Fn(&str) -> ParseResult<&str> {
 }
 
 pub fn multispace1() -> impl Fn(&str) -> ParseResult<&str> {
-    move |input: &str| {
+    |input: &str| {
         let (rest, matched) = multispace0()(input)?;
         if matched.is_empty() {
             Err("expected at least one whitespace character")
@@ -303,8 +303,62 @@ where
     }
 }
 
+pub fn double() -> impl Fn(&str) -> ParseResult<f64> {
+    |input: &str| {
+        let bytes = input.as_bytes();
+        if bytes.is_empty() {
+            return Err("expected at least one digit");
+        }
+
+        let mut result = 0f64;
+        let mut pos = 0;
+        let mut negative = false;
+
+        if bytes[0] == b'-' {
+            negative = true;
+            pos = 1;
+        }
+
+        if pos >= bytes.len() {
+            return Err("expected digits after sign");
+        }
+
+        while pos < bytes.len() {
+            match bytes[pos] {
+                b'0'..=b'9' => {
+                    result = result * 10.0 + (bytes[pos] - b'0') as f64;
+                    pos += 1;
+                }
+                b'.' => {
+                    pos += 1;
+                    let mut frac = 0.1;
+                    while pos < bytes.len() {
+                        match bytes[pos] {
+                            b'0'..=b'9' => {
+                                result += (bytes[pos] - b'0') as f64 * frac;
+                                frac *= 0.1;
+                                pos += 1;
+                            }
+                            _ => break,
+                        }
+                    }
+                    break;
+                }
+                _ => break,
+            }
+        }
+
+        if pos == if negative { 1 } else { 0 } {
+            return Err("expected at least one digit");
+        }
+
+        let final_result = if negative { -result } else { result };
+        Ok((&input[pos..], final_result))
+    }
+}
+
 pub fn integer() -> impl Fn(&str) -> ParseResult<i64> {
-    move |input: &str| {
+    |input: &str| {
         let bytes = input.as_bytes();
         if bytes.is_empty() {
             return Err("expected at least one digit");

@@ -237,13 +237,6 @@ mod tests {
     }
 
     #[test]
-    fn test_integer_success() {
-        let parser = integer();
-        let result = parser.parse("123abc");
-        assert_eq!(result, Ok(("abc", 123)));
-    }
-
-    #[test]
     fn test_separated_pair_success() {
         let parser = separated_pair(char('a'), char(','), char('b'));
         let result = parser.parse("a,bcd");
@@ -283,5 +276,54 @@ mod tests {
         let parser = map(integer(), |num| num * 2);
         let result = parser.parse("21abc");
         assert_eq!(result, Ok(("abc", 42)));
+    }
+
+    #[test]
+    fn test_double() {
+        let parser = double();
+        let result = parser.parse("3.14xyz");
+        assert_eq!(result, Ok(("xyz", 3.14)));
+    }
+
+    #[test]
+    fn test_double_no_decimal() {
+        let parser = double();
+        let result = parser.parse("42xyz");
+        assert_eq!(result, Ok(("xyz", 42.0)));
+    }
+
+    #[test]
+    fn test_integer() {
+        let parser = integer();
+        let result = parser.parse("456def");
+        assert_eq!(result, Ok(("def", 456)));
+    }
+
+    #[test]
+    fn test_integer_negative() {
+        let parser = integer();
+        let result = parser.parse("-789ghi");
+        assert_eq!(result, Ok(("ghi", -789)));
+    }
+
+    #[test]
+    fn test_integer_no_digits() {
+        let parser = integer();
+        let result = parser.parse("abc");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_alt_macro_works() {
+        let parser = alt!(char('a'), char('b'), char('c'));
+        let result = parser.parse("cxyz");
+        assert_eq!(result, Ok(("xyz", 'c')));
+    }
+
+    #[test]
+    fn test_alt_macro_all_fail() {
+        let parser = alt!(char('a'), char('b'), char('c'));
+        let result = parser.parse("xyz");
+        assert!(result.is_err());
     }
 }
