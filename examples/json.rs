@@ -1,5 +1,7 @@
 use kukka::*;
-use std::{collections::HashMap, error::Error, fs, iter::Map};
+use rustc_hash::FxHashMap;
+use std::rc::Rc;
+use std::{error::Error, fs};
 
 #[derive(Clone, Debug, PartialEq)]
 enum Node<'a> {
@@ -9,8 +11,8 @@ enum Node<'a> {
     String(&'a str),
 
     // since we are using the hashmap the actual order of the objects is not preserved.
-    Object(Box<HashMap<&'a str, Node<'a>>>),
-    Array(Vec<Node<'a>>),
+    Object(Rc<FxHashMap<&'a str, Node<'a>>>),
+    Array(Rc<Vec<Node<'a>>>),
 }
 
 fn parse_boolean(data: &str) -> ParseResult<Node> {
@@ -37,17 +39,18 @@ fn parse_object(json: &str) -> ParseResult<Node> {
     map(
         delimited(
             char('{'),
-            separated(
+            separated_into_map(
                 separated_pair(
                     delimited(multispace0(), parse_string_inner, multispace0()),
                     char(':'),
                     delimited(multispace0(), parse_json, multispace0()),
                 ),
                 char(','),
+                8,
             ),
             char('}'),
         ),
-        |v| Node::Object(Box::new(v.into_iter().collect())),
+        |v| Node::Object(Rc::new(v)),
     )
     .parse(json)
 }
@@ -62,7 +65,7 @@ fn parse_array(json: &str) -> ParseResult<Node> {
             ),
             char(']'),
         ),
-        |val| Node::Array(val),
+        |val| Node::Array(Rc::new(val)),
     )
     .parse(json)
 }
@@ -72,7 +75,7 @@ fn parse_number(data: &str) -> ParseResult<Node> {
 }
 
 fn parse_json(data: &str) -> ParseResult<Node> {
-    // TODO: yeah this sucks
+    // alternatively for better performance
     delimited(
         multispace0(),
         alt!(

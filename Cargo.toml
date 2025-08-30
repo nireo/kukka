@@ -16,4 +16,6 @@ strip = false
 debug = 1
 
 [dependencies]
+memchr = "2.7.5"
+rustc-hash = "2.1.1"
 tikv-jemallocator = "0.6.0"

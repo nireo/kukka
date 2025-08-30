@@ -1,4 +1,7 @@
-const VECTOR_INITIAL_CAPACITY: usize = 16;
+use memchr::memchr;
+use rustc_hash::FxHashMap;
+
+const VECTOR_INITIAL_CAPACITY: usize = 10;
 
 /// input just contains a reference to a string. this is done to prevent copying.
 pub type Input<'a> = &'a str;
@@ -62,8 +65,6 @@ where
 
 /// Value returns a given value given to the function if the parser is successful, think of it as a
 /// more ergonomic 'map'
-///
-/// TODO: prevent cloning here.
 #[inline(always)]
 pub fn value<'a, P, F, O, V>(p: P, val_fn: F) -> impl Parser<'a, V>
 where
@@ -113,6 +114,8 @@ where
     }
 }
 
+/// take_while consumes input while the predicate is true. If the predicate is false at the start
+/// of the input, an empty string is returned.
 pub fn take_while<F>(p: F) -> impl Fn(&str) -> ParseResult<&str>
 where
     F: Fn(char) -> bool,
@@ -141,14 +144,12 @@ where
     }
 }
 
+/// take_until consumes input until the target character is found. The target character is not
+/// consumed. If the target character is not found, the entire input is consumed.
 pub fn take_until(target: char) -> impl Fn(&str) -> ParseResult<&str> {
-    move |input: &str| {
-        let end_pos = input
-            .char_indices()
-            .find(|(_, c)| *c == target)
-            .map(|(pos, _)| pos)
-            .unwrap_or(input.len());
-        Ok((&input[end_pos..], &input[..end_pos]))
+    move |input: &str| match memchr(target as u8, input.as_bytes()) {
+        Some(pos) => Ok((&input[pos..], &input[..pos])),
+        None => Ok(("", input)),
     }
 }
 
@@ -162,6 +163,7 @@ pub fn comma() -> impl Fn(&str) -> ParseResult<char> {
     }
 }
 
+/// char matches a specific character at the start of the input
 #[inline(always)]
 pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     move |input: &str| {
@@ -173,6 +175,7 @@ pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     }
 }
 
+/// string matches a specific string at the start of the input
 #[inline(always)]
 pub fn string(expected: &'static str) -> impl Fn(&str) -> ParseResult<&str> {
     move |input: &str| {
@@ -184,6 +187,7 @@ pub fn string(expected: &'static str) -> impl Fn(&str) -> ParseResult<&str> {
     }
 }
 
+/// seq applies two parsers in sequence and returns a tuple of their results
 pub fn seq<P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(&str) -> ParseResult<(O1, O2)>
 where
     P1: Fn(&str) -> ParseResult<O1>,
@@ -196,6 +200,7 @@ where
     }
 }
 
+/// many applies a parser zero or more times and collects the results in a vector
 pub fn many<'a, P, O>(parser: P) -> impl Parser<'a, Vec<O>>
 where
     P: Parser<'a, O>,
@@ -217,6 +222,8 @@ where
     }
 }
 
+/// map applies a function to the output of a parser
+#[inline(always)]
 pub fn map<'a, P, O1, O2, F>(parser: P, f: F) -> impl Parser<'a, O2>
 where
     P: Parser<'a, O1>,
@@ -375,6 +382,45 @@ where
         let (rest, _) = p2.parse(rest)?;
         let (rest, out3) = p3.parse(rest)?;
         Ok((rest, (out1, out3)))
+    }
+}
+
+pub fn separated_into_map<'a, P1, P2, O, K, V>(
+    p1: P1,
+    p2: P2,
+    capacity_hint: usize,
+) -> impl Parser<'a, FxHashMap<K, V>>
+where
+    P1: Parser<'a, (K, V)>,
+    P2: Parser<'a, O>,
+    K: std::hash::Hash + Eq,
+{
+    move |mut input: Input<'a>| {
+        let mut map = FxHashMap::with_capacity_and_hasher(capacity_hint, Default::default());
+        match p1.parse(input) {
+            Ok((rest, (key, value))) => {
+                map.insert(key, value);
+                input = rest;
+            }
+            Err(_) => return Ok((input, map)),
+        }
+
+        loop {
+            match p2.parse(input) {
+                Ok((rest, _)) => {
+                    input = rest;
+                    match p1.parse(input) {
+                        Ok((rest, (key, value))) => {
+                            map.insert(key, value);
+                            input = rest;
+                        }
+                        Err(_) => return Err("expected element after separator"),
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        Ok((input, map))
     }
 }
 
