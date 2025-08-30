@@ -3,4 +3,12 @@ name = "kukka"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+opt-level = 3           # Maximum optimization
+lto = "fat"            # Link-time optimization across all crates
+codegen-units = 1      # Single codegen unit for better optimization
+panic = "abort"        # Smaller binaries, slight perf boost
+strip = true           # Remove debug symbols (Rust 1.59+)
+
 [dependencies]
+tikv-jemallocator = "0.6.0"

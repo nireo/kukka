@@ -1,3 +1,5 @@
+const VECTOR_INITIAL_CAPACITY: usize = 16;
+
 /// input just contains a reference to a string. this is done to prevent copying.
 pub type Input<'a> = &'a str;
 
@@ -74,6 +76,7 @@ where
     }
 }
 
+#[inline(always)]
 pub fn or<'a, P1, P2, O>(p1: P1, p2: P2) -> impl Parser<'a, O>
 where
     P1: Parser<'a, O>,
@@ -169,7 +172,7 @@ where
     P: Parser<'a, O>,
 {
     move |mut input: Input<'a>| {
-        let mut res = Vec::new();
+        let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
 
         loop {
             match parser.parse(input) {
@@ -201,7 +204,7 @@ where
     P: Parser<'a, O>,
 {
     move |mut input: Input<'a>| {
-        let mut res = Vec::new();
+        let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
         match parser.parse(input) {
             Ok((rest, result)) => {
                 res.push(result);
@@ -229,7 +232,7 @@ where
     P2: Parser<'a, O2>,
 {
     move |mut input: Input<'a>| {
-        let mut res = Vec::new();
+        let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
 
         match p1.parse(input) {
             Ok((rest, result)) => {
@@ -327,7 +330,7 @@ where
     P2: Parser<'a, O2>,
 {
     move |mut input: Input<'a>| {
-        let mut res = Vec::new();
+        let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
         let (rest, result) = p1.parse(input)?;
         res.push(result);
         input = rest;

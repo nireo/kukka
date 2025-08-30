@@ -9,7 +9,7 @@ enum Node<'a> {
     String(&'a str),
 
     // since we are using the hashmap the actual order of the objects is not preserved.
-    Object(Box<HashMap<&'a str, Node<'a>>>),
+    Object(HashMap<&'a str, Node<'a>>),
     Array(Vec<Node<'a>>),
 }
 
@@ -47,7 +47,7 @@ fn parse_object(json: &str) -> ParseResult<Node> {
             ),
             char('}'),
         ),
-        |v| Node::Object(Box::new(v.into_iter().collect())),
+        |v| Node::Object(v.into_iter().collect()),
     )
     .parse(json)
 }
@@ -100,10 +100,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let path = &args[1];
     let content = fs::read_to_string(path)?;
-    println!("{}", content);
 
-    let res = parse_json(&content)?;
-    println!("{:?}", res);
+    // test how long it takes to parse the file
+    let start = std::time::Instant::now();
+
+    parse_json(&content)?;
+    let duration = start.elapsed();
+    println!("Time elapsed in parsing is: {:?}", duration);
 
     Ok(())
 }
