@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let field_parser = take_while(|c| c != ';' && c != '\n' && c != '\r');
     let line_parser = separated1(field_parser, char(';'));
-    let newline_parser = alt(char('\n'), char('\r'));
+    let newline_parser = or(char('\n'), char('\r'));
     let csv_parser = separated1(line_parser, newline_parser);
 
     let (_, rows) = csv_parser.parse(&content)?;
