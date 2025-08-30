@@ -24,7 +24,19 @@ where
 }
 
 pub fn multispace0() -> impl Fn(&str) -> ParseResult<&str> {
-    take_while(|c| c.is_whitespace())
+    |input: &str| {
+        let bytes = input.as_bytes();
+        let mut end_pos = 0;
+
+        while end_pos < bytes.len() {
+            match bytes[end_pos] {
+                b' ' | b'\t' | b'\n' | b'\r' => end_pos += 1,
+                _ => break,
+            }
+        }
+
+        Ok((&input[end_pos..], &input[..end_pos]))
+    }
 }
 
 pub fn multispace1() -> impl Fn(&str) -> ParseResult<&str> {
@@ -52,6 +64,7 @@ where
 /// more ergonomic 'map'
 ///
 /// TODO: prevent cloning here.
+#[inline(always)]
 pub fn value<'a, P, V, O>(p: P, val: V) -> impl Parser<'a, V>
 where
     P: Parser<'a, O>,
@@ -105,11 +118,25 @@ where
     F: Fn(char) -> bool,
 {
     move |input: &str| {
-        let end_pos = input
-            .char_indices()
-            .find(|(_, c)| !p(*c))
-            .map(|(pos, _)| pos)
-            .unwrap_or(input.len());
+        let bytes = input.as_bytes();
+        let mut end_pos = 0;
+
+        for &byte in bytes {
+            if byte > 127 || !p(byte as char) {
+                break;
+            }
+            end_pos += 1;
+        }
+
+        if end_pos < bytes.len() && bytes[end_pos] > 127 {
+            end_pos = input
+                .char_indices()
+                .skip_while(|(i, _)| *i < end_pos)
+                .find(|(_, c)| !p(*c))
+                .map(|(pos, _)| pos)
+                .unwrap_or(input.len());
+        }
+
         Ok((&input[end_pos..], &input[..end_pos]))
     }
 }
@@ -135,6 +162,7 @@ pub fn comma() -> impl Fn(&str) -> ParseResult<char> {
     }
 }
 
+#[inline(always)]
 pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     move |input: &str| {
         if input.as_bytes().first() == Some(&(expected as u8)) {
@@ -145,6 +173,7 @@ pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
     }
 }
 
+#[inline(always)]
 pub fn string(expected: &'static str) -> impl Fn(&str) -> ParseResult<&str> {
     move |input: &str| {
         if input.starts_with(expected) {
@@ -354,6 +383,26 @@ where
         }
         Ok((input, res))
     }
+}
+
+#[macro_export]
+macro_rules! alt {
+    ($first:expr $(, $rest:expr)* $(,)?) => {
+        |input| {  // No explicit lifetime - let compiler infer
+            match ($first).parse(input) {
+                Ok(result) => Ok(result),
+                Err(_) => {
+                    $(
+                        match ($rest).parse(input) {
+                            Ok(result) => return Ok(result),
+                            Err(_) => {}
+                        }
+                    )*
+                    Err("no alternative matched")
+                }
+            }
+        }
+    };
 }
 
 // tests in the test.rs file

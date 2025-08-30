@@ -9,7 +9,7 @@ enum Node<'a> {
     String(&'a str),
 
     // since we are using the hashmap the actual order of the objects is not preserved.
-    Object(HashMap<&'a str, Node<'a>>),
+    Object(Box<HashMap<&'a str, Node<'a>>>),
     Array(Vec<Node<'a>>),
 }
 
@@ -47,7 +47,7 @@ fn parse_object(json: &str) -> ParseResult<Node> {
             ),
             char('}'),
         ),
-        |v| Node::Object(v.into_iter().collect()),
+        |v| Node::Object(Box::new(v.into_iter().collect())),
     )
     .parse(json)
 }
@@ -75,16 +75,24 @@ fn parse_json(data: &str) -> ParseResult<Node> {
     // TODO: yeah this sucks
     delimited(
         multispace0(),
-        or(
+        alt!(
+            parse_string,
+            parse_number,
+            parse_array,
+            parse_object,
             parse_null,
-            or(
-                parse_boolean,
-                or(
-                    parse_string,
-                    or(parse_object, or(parse_array, parse_number)),
-                ),
-            ),
+            parse_boolean,
         ),
+        // or(
+        //     parse_null,
+        //     or(
+        //         parse_boolean,
+        //         or(
+        //             parse_string,
+        //             or(parse_object, or(parse_array, parse_number)),
+        //         ),
+        //     ),
+        // ),
         multispace0(),
     )
     .parse(data)
