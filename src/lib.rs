@@ -65,27 +65,27 @@ where
 ///
 /// TODO: prevent cloning here.
 #[inline(always)]
-pub fn value<'a, P, V, O>(p: P, val: V) -> impl Parser<'a, V>
+pub fn value<'a, P, F, O, V>(p: P, val_fn: F) -> impl Parser<'a, V>
 where
     P: Parser<'a, O>,
-    V: Clone,
+    F: Fn() -> V,
 {
     move |input: Input<'a>| match p.parse(input) {
-        Ok((rest, _)) => Ok((rest, val.clone())),
+        Ok((rest, _)) => Ok((rest, val_fn())),
         Err(_) => Err("didnt match value parser"),
     }
 }
 
 /// Tries to apply the parser `p`. If it fails, it returns the provided default value without
 /// consuming any input. This will clone the default value. TODO: avoid cloning if possible.
-pub fn or_default<'a, P, O>(p: P, default: O) -> impl Parser<'a, O>
+pub fn or_default<'a, P, V, O, D>(p: P, default: D) -> impl Parser<'a, O>
 where
     P: Parser<'a, O>,
-    O: Clone,
+    D: Fn() -> O,
 {
     move |input: Input<'a>| match p.parse(input) {
         Ok((rest, res)) => Ok((rest, res)),
-        Err(_) => Ok((input, default.clone())),
+        Err(_) => Ok((input, default())),
     }
 }
 
@@ -298,15 +298,40 @@ where
 
 pub fn integer() -> impl Fn(&str) -> ParseResult<i64> {
     move |input: &str| {
-        let (rest, digits) = digit01()(input)?;
-        if digits.is_empty() {
+        let bytes = input.as_bytes();
+        if bytes.is_empty() {
             return Err("expected at least one digit");
         }
 
-        match digits.parse::<i64>() {
-            Ok(num) => Ok((rest, num)),
-            Err(_) => Err("failed to parse integer"),
+        let mut result = 0i64;
+        let mut pos = 0;
+        let mut negative = false;
+
+        if bytes[0] == b'-' {
+            negative = true;
+            pos = 1;
         }
+
+        if pos >= bytes.len() {
+            return Err("expected digits after sign");
+        }
+
+        while pos < bytes.len() {
+            match bytes[pos] {
+                b'0'..=b'9' => {
+                    result = result * 10 + (bytes[pos] - b'0') as i64;
+                    pos += 1;
+                }
+                _ => break,
+            }
+        }
+
+        if pos == if negative { 1 } else { 0 } {
+            return Err("expected at least one digit");
+        }
+
+        let final_result = if negative { -result } else { result };
+        Ok((&input[pos..], final_result))
     }
 }
 

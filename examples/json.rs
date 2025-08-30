@@ -15,14 +15,14 @@ enum Node<'a> {
 
 fn parse_boolean(data: &str) -> ParseResult<Node> {
     or(
-        value(string("true"), Node::Boolean(true)),
-        value(string("false"), Node::Boolean(false)),
+        value(string("true"), || Node::Boolean(true)),
+        value(string("false"), || Node::Boolean(false)),
     )
     .parse(data)
 }
 
 fn parse_null(data: &str) -> ParseResult<Node> {
-    value(string("null"), Node::Null).parse(data)
+    value(string("null"), || Node::Null).parse(data)
 }
 
 fn parse_string_inner(data: &str) -> ParseResult<&str> {
@@ -83,16 +83,6 @@ fn parse_json(data: &str) -> ParseResult<Node> {
             parse_null,
             parse_boolean,
         ),
-        // or(
-        //     parse_null,
-        //     or(
-        //         parse_boolean,
-        //         or(
-        //             parse_string,
-        //             or(parse_object, or(parse_array, parse_number)),
-        //         ),
-        //     ),
-        // ),
         multispace0(),
     )
     .parse(data)
