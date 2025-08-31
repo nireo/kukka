@@ -15,7 +15,7 @@ enum Node<'a> {
     Array(Rc<Vec<Node<'a>>>),
 }
 
-fn parse_boolean(data: &str) -> ParseResult<Node> {
+fn parse_boolean<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
     or(
         value(string("true"), || Node::Boolean(true)),
         value(string("false"), || Node::Boolean(false)),
@@ -23,19 +23,19 @@ fn parse_boolean(data: &str) -> ParseResult<Node> {
     .parse(data)
 }
 
-fn parse_null(data: &str) -> ParseResult<Node> {
+fn parse_null<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
     value(string("null"), || Node::Null).parse(data)
 }
 
-fn parse_string_inner(data: &str) -> ParseResult<&str> {
+fn parse_string_inner<'a>(data: &'a str) -> ParseResult<'a, &'a str> {
     delimited(char('"'), take_while(|c| c != '"'), char('"')).parse(data)
 }
 
-fn parse_string(data: &str) -> ParseResult<Node> {
+fn parse_string<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
     map(parse_string_inner, |s| Node::String(s)).parse(data)
 }
 
-fn parse_object(json: &str) -> ParseResult<Node> {
+fn parse_object<'a>(json: &'a str) -> ParseResult<'a, Node<'a>> {
     map(
         delimited(
             char('{'),
@@ -55,7 +55,7 @@ fn parse_object(json: &str) -> ParseResult<Node> {
     .parse(json)
 }
 
-fn parse_array(json: &str) -> ParseResult<Node> {
+fn parse_array<'a>(json: &'a str) -> ParseResult<'a, Node<'a>> {
     map(
         delimited(
             char('['),
@@ -70,11 +70,11 @@ fn parse_array(json: &str) -> ParseResult<Node> {
     .parse(json)
 }
 
-fn parse_number(data: &str) -> ParseResult<Node> {
+fn parse_number<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
     map(integer(), |n| Node::Number(n)).parse(data)
 }
 
-fn parse_json(data: &str) -> ParseResult<Node> {
+fn parse_json<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
     // alternatively for better performance
     delimited(
         multispace0(),

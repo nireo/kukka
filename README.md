@@ -9,11 +9,9 @@ Kukka is a small parser combinator library for Rust, inspired by nom. It provide
 - No trait object overhead
 - Simple and easy to use
 
-## TODO
+## Examples
 
-- There are some clones in the library which most likely aren't necessary, still need to check those.
-
-## Example
+### CSV parser
 
 ```rust
 // This example is still very simplistic and doesn't validate for example that the lines
@@ -47,5 +45,3 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 ```
-
-Other examples can be found in the `/examples` folder.

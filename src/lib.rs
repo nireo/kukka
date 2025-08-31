@@ -79,7 +79,7 @@ where
 
 /// Tries to apply the parser `p`. If it fails, it returns the provided default value without
 /// consuming any input. This will clone the default value. TODO: avoid cloning if possible.
-pub fn or_default<'a, P, V, O, D>(p: P, default: D) -> impl Parser<'a, O>
+pub fn or_default<'a, P, O, D>(p: P, default: D) -> impl Parser<'a, O>
 where
     P: Parser<'a, O>,
     D: Fn() -> O,
@@ -150,16 +150,6 @@ pub fn take_until(target: char) -> impl Fn(&str) -> ParseResult<&str> {
     move |input: &str| match memchr(target as u8, input.as_bytes()) {
         Some(pos) => Ok((&input[pos..], &input[..pos])),
         None => Ok(("", input)),
-    }
-}
-
-pub fn comma() -> impl Fn(&str) -> ParseResult<char> {
-    move |input: &str| {
-        if input.as_bytes().first() == Some(&b',') {
-            Ok((&input[1..], ','))
-        } else {
-            Err("expected comma")
-        }
     }
 }
 

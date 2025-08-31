@@ -326,4 +326,29 @@ mod tests {
         let result = parser.parse("xyz");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_value() {
+        let parser = value(string("true"), || true);
+        let result = parser.parse("trueabc");
+        assert_eq!(result, Ok(("abc", true)));
+    }
+
+    #[test]
+    fn test_value_no_match() {
+        let parser = value(string("true"), || true);
+        let result = parser.parse("falseabc");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_or_default() {
+        let p1 = char('x');
+        let p2 = char('y');
+        let parser = or_default(or(p1, p2), || 'z');
+        let result1 = parser.parse("xyz");
+        let result2 = parser.parse("abc");
+        assert_eq!(result1, Ok(("yz", 'x')));
+        assert_eq!(result2, Ok(("abc", 'z')));
+    }
 }
