@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use memchr::memchr;
 use rustc_hash::FxHashMap;
 
@@ -437,7 +439,7 @@ pub fn separated_into_map<'a, P1, P2, O, K, V>(
 where
     P1: Parser<'a, (K, V)>,
     P2: Parser<'a, O>,
-    K: std::hash::Hash + Eq,
+    K: Hash + Eq,
 {
     move |mut input: Input<'a>| {
         let mut map = FxHashMap::with_capacity_and_hasher(capacity_hint, Default::default());
@@ -518,6 +520,60 @@ macro_rules! alt {
             }
         }
     };
+}
+
+pub fn fold_many0<'a, P, O, F, Acc>(parser: P, init: Acc, f: F) -> impl Parser<'a, Acc>
+where
+    P: Parser<'a, O>,
+    F: Fn(Acc, O) -> Acc,
+    Acc: Clone,
+{
+    move |mut input: Input<'a>| {
+        let mut acc = init.clone();
+
+        loop {
+            match parser.parse(input) {
+                Ok((rest, result)) => {
+                    acc = f(acc, result);
+                    input = rest;
+                }
+                Err(_) => break,
+            }
+        }
+
+        Ok((input, acc))
+    }
+}
+
+pub fn fold_many1<'a, P, O, F, Acc>(parser: P, init: Acc, f: F) -> impl Parser<'a, Acc>
+where
+    P: Parser<'a, O>,
+    F: Fn(Acc, O) -> Acc,
+    Acc: Clone,
+{
+    move |mut input: Input<'a>| {
+        let mut acc = init.clone();
+
+        match parser.parse(input) {
+            Ok((rest, result)) => {
+                acc = f(acc, result);
+                input = rest;
+            }
+            Err(_) => return Err("could not parse once"),
+        }
+
+        loop {
+            match parser.parse(input) {
+                Ok((rest, result)) => {
+                    acc = f(acc, result);
+                    input = rest;
+                }
+                Err(_) => break,
+            }
+        }
+
+        Ok((input, acc))
+    }
 }
 
 // tests in the test.rs file

@@ -351,4 +351,43 @@ mod tests {
         assert_eq!(result1, Ok(("yz", 'x')));
         assert_eq!(result2, Ok(("abc", 'z')));
     }
+
+    #[test]
+    fn test_fold_many_returns_init_with_empty() {
+        let parser = fold_many0(integer(), 0, |acc, num| acc + num);
+        let res = parser.parse("");
+        assert_eq!(res, Ok(("", 0)));
+    }
+
+    #[test]
+    fn test_fold_many_sums_integers() {
+        let parser = fold_many0(and(integer(), multispace1()), 0, |acc, num| acc + num.0);
+        let res = parser.parse("1 2 3 abc");
+        assert_eq!(res, Ok(("abc", 6)));
+    }
+
+    #[test]
+    fn test_fold_many_string_concat() {
+        let parser = fold_many0(
+            map(char('a'), |c| c.to_string()),
+            String::new(),
+            |mut acc, s| {
+                acc.push_str(&s);
+                acc
+            },
+        );
+
+        let result = parser.parse("aaaabbb");
+        assert_eq!(result, Ok(("bbb", "aaaa".to_string())));
+    }
+
+    #[test]
+    fn test_fold_many1_requires_one() {
+        let parser = fold_many1(char('a'), 0usize, |acc, _| acc + 1);
+        let result = parser.parse("bbb");
+        assert!(result.is_err());
+
+        let result = parser.parse("aaabbb");
+        assert_eq!(result, Ok(("bbb", 3)));
+    }
 }
