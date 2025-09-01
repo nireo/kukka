@@ -3,6 +3,7 @@ use std::hash::Hash;
 use memchr::memchr;
 use rustc_hash::FxHashMap;
 
+/// initial capacity for vectors to avoid reallocations
 const VECTOR_INITIAL_CAPACITY: usize = 10;
 
 /// input just contains a reference to a string. this is done to prevent copying.
@@ -15,6 +16,7 @@ pub type Input<'a> = &'a str;
 /// TODO: implement proper errors
 pub type ParseResult<'a, T> = Result<(Input<'a>, T), &'static str>;
 
+/// A Parser is a function that takes an input string and returns a ParseResult.
 pub trait Parser<'a, Out> {
     fn parse(&self, input: Input<'a>) -> ParseResult<'a, Out>;
 }
@@ -28,6 +30,7 @@ where
     }
 }
 
+/// multispace0 matches zero or more whitespace characters (space, tab, newline, carriage return)
 pub fn multispace0() -> impl Fn(&str) -> ParseResult<&str> {
     |input: &str| {
         let bytes = input.as_bytes();
@@ -44,6 +47,7 @@ pub fn multispace0() -> impl Fn(&str) -> ParseResult<&str> {
     }
 }
 
+/// multispace1 is like multispace0, but requires at least one whitespace character
 pub fn multispace1() -> impl Fn(&str) -> ParseResult<&str> {
     |input: &str| {
         let (rest, matched) = multispace0()(input)?;
@@ -52,16 +56,6 @@ pub fn multispace1() -> impl Fn(&str) -> ParseResult<&str> {
         } else {
             Ok((rest, matched))
         }
-    }
-}
-
-pub fn opt<'a, P, O>(p: P) -> impl Parser<'a, Option<O>>
-where
-    P: Parser<'a, O>,
-{
-    move |input: Input<'a>| match p.parse(input) {
-        Ok((rest, res)) => Ok((rest, Some(res))),
-        Err(_) => Ok((input, None)),
     }
 }
 
@@ -92,6 +86,7 @@ where
     }
 }
 
+/// or tries to apply the first parser, if it fails, it tries the second parser
 #[inline(always)]
 pub fn or<'a, P1, P2, O>(p1: P1, p2: P2) -> impl Parser<'a, O>
 where
@@ -104,6 +99,7 @@ where
     }
 }
 
+/// and applies two parsers in sequence and returns a tuple of their results
 pub fn and<'a, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Parser<'a, (O1, O2)>
 where
     P1: Parser<'a, O1>,
@@ -227,6 +223,8 @@ where
     }
 }
 
+/// many1 applies a parser one or more times and collects the results in a vector. If the parser
+/// does not match at least once, an error is returned.
 pub fn many1<'a, P, O>(parser: P) -> impl Parser<'a, Vec<O>>
 where
     P: Parser<'a, O>,
@@ -254,6 +252,10 @@ where
     }
 }
 
+/// separated applies two parsers in sequence, where the second parser is a separator. The results
+/// of the first parser are collected into a vector. The separator parser is not included in the
+/// results. If the first parser does not match at least once, an empty vector is returned
+/// instead.
 pub fn separated<'a, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Parser<'a, Vec<O1>>
 where
     P1: Parser<'a, O1>,
@@ -295,6 +297,7 @@ where
     }
 }
 
+/// double parses a signed floating point number from the input
 pub fn double() -> impl Fn(&str) -> ParseResult<f64> {
     |input: &str| {
         let bytes = input.as_bytes();
@@ -349,6 +352,7 @@ pub fn double() -> impl Fn(&str) -> ParseResult<f64> {
     }
 }
 
+/// integer parses a signed integer from the input
 pub fn integer() -> impl Fn(&str) -> ParseResult<i64> {
     |input: &str| {
         let bytes = input.as_bytes();
@@ -413,6 +417,9 @@ where
     }
 }
 
+/// separated_pair applies three parsers in sequence, but only returns the results of the first
+/// and third parser. This is useful for example when parsing key-value pairs where the key and
+/// value are separated by a colon or equals sign.
 pub fn separated_pair<'a, P1, P2, P3, O1, O2, O3>(
     p1: P1,
     p2: P2,
@@ -431,6 +438,10 @@ where
     }
 }
 
+/// separated_into_map is like separated, but it expects the first parser to return a tuple of key
+/// and value. The results are collected into a HashMap. If the same key is found
+/// multiple times, the last value is kept. The capacity_hint is used to initialize the
+/// HashMap with a certain capacity to avoid reallocations.
 pub fn separated_into_map<'a, P1, P2, O, K, V>(
     p1: P1,
     p2: P2,
@@ -470,6 +481,7 @@ where
     }
 }
 
+/// separated1 is like separated, but requires at least one element
 pub fn separated1<'a, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Parser<'a, Vec<O1>>
 where
     P1: Parser<'a, O1>,
@@ -522,6 +534,8 @@ macro_rules! alt {
     };
 }
 
+/// fold_many0 applies a parser zero or more times and folds the results using the provided
+/// function and initial accumulator value
 pub fn fold_many0<'a, P, O, F, Acc>(parser: P, init: Acc, f: F) -> impl Parser<'a, Acc>
 where
     P: Parser<'a, O>,
@@ -545,6 +559,18 @@ where
     }
 }
 
+/// peek applies a parser but does not consume any input
+pub fn peek<'a, P, O>(parser: P) -> impl Parser<'a, O>
+where
+    P: Parser<'a, O>,
+{
+    move |input: Input<'a>| {
+        let (_, result) = parser.parse(input)?;
+        Ok((input, result))
+    }
+}
+
+/// fold_many1 is like fold_many0, but requires at least one successful parse
 pub fn fold_many1<'a, P, O, F, Acc>(parser: P, init: Acc, f: F) -> impl Parser<'a, Acc>
 where
     P: Parser<'a, O>,
@@ -573,6 +599,17 @@ where
         }
 
         Ok((input, acc))
+    }
+}
+
+/// take consumes a specific number of characters from the input
+pub fn take(count: usize) -> impl Fn(&str) -> ParseResult<&str> {
+    move |input: &str| {
+        if input.len() >= count {
+            Ok((&input[count..], &input[..count]))
+        } else {
+            Err("not enough input to take")
+        }
     }
 }
 
