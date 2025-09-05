@@ -75,7 +75,6 @@ fn parse_number<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
 }
 
 fn parse_json<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
-    // alternatively for better performance
     delimited(
         multispace0(),
         alt!(
@@ -102,7 +101,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let path = &args[1];
     let content = fs::read_to_string(path)?;
 
-    // test how long it takes to parse the file
     let start = std::time::Instant::now();
 
     parse_json(&content)?;
