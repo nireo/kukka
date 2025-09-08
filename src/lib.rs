@@ -31,8 +31,8 @@ where
 }
 
 /// multispace0 matches zero or more whitespace characters (space, tab, newline, carriage return)
-pub fn multispace0() -> impl Fn(&str) -> ParseResult<&str> {
-    |input: &str| {
+pub fn multispace0<'a>() -> impl Parser<'a, &'a str> {
+    |input: Input<'a>| {
         let bytes = input.as_bytes();
         let mut end_pos = 0;
 
@@ -48,9 +48,9 @@ pub fn multispace0() -> impl Fn(&str) -> ParseResult<&str> {
 }
 
 /// multispace1 is like multispace0, but requires at least one whitespace character
-pub fn multispace1() -> impl Fn(&str) -> ParseResult<&str> {
-    |input: &str| {
-        let (rest, matched) = multispace0()(input)?;
+pub fn multispace1<'a>() -> impl Parser<'a, &'a str> {
+    |input: Input<'a>| {
+        let (rest, matched) = multispace0().parse(input)?;
         if matched.is_empty() {
             Err("expected at least one whitespace character")
         } else {
@@ -114,11 +114,11 @@ where
 
 /// take_while consumes input while the predicate is true. If the predicate is false at the start
 /// of the input, an empty string is returned.
-pub fn take_while<F>(p: F) -> impl Fn(&str) -> ParseResult<&str>
+pub fn take_while<'a, F>(p: F) -> impl Parser<'a, &'a str>
 where
     F: Fn(char) -> bool,
 {
-    move |input: &str| {
+    move |input: Input<'a>| {
         let bytes = input.as_bytes();
         let mut end_pos = 0;
 
@@ -144,8 +144,8 @@ where
 
 /// take_until consumes input until the target character is found. The target character is not
 /// consumed. If the target character is not found, the entire input is consumed.
-pub fn take_until(target: char) -> impl Fn(&str) -> ParseResult<&str> {
-    move |input: &str| match memchr(target as u8, input.as_bytes()) {
+pub fn take_until<'a>(target: char) -> impl Parser<'a, &'a str> {
+    move |input: Input<'a>| match memchr(target as u8, input.as_bytes()) {
         Some(pos) => Ok((&input[pos..], &input[..pos])),
         None => Ok(("", input)),
     }
@@ -153,8 +153,8 @@ pub fn take_until(target: char) -> impl Fn(&str) -> ParseResult<&str> {
 
 /// char matches a specific character at the start of the input
 #[inline(always)]
-pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
-    move |input: &str| {
+pub fn char<'a>(expected: char) -> impl Parser<'a, char> {
+    move |input: Input<'a>| {
         if input.as_bytes().first() == Some(&(expected as u8)) {
             return Ok((&input[1..], expected));
         } else {
@@ -165,26 +165,13 @@ pub fn char(expected: char) -> impl Fn(&str) -> ParseResult<char> {
 
 /// string matches a specific string at the start of the input
 #[inline(always)]
-pub fn string(expected: &'static str) -> impl Fn(&str) -> ParseResult<&str> {
-    move |input: &str| {
+pub fn string<'a>(expected: &'static str) -> impl Parser<'a, &'a str> {
+    move |input: Input<'a>| {
         if input.starts_with(expected) {
             Ok((&input[expected.len()..], &input[..expected.len()]))
         } else {
             Err("string mismatch")
         }
-    }
-}
-
-/// seq applies two parsers in sequence and returns a tuple of their results
-pub fn seq<P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(&str) -> ParseResult<(O1, O2)>
-where
-    P1: Fn(&str) -> ParseResult<O1>,
-    P2: Fn(&str) -> ParseResult<O2>,
-{
-    move |input: &str| {
-        let (rest, r1) = p1(input)?;
-        let (rest, r2) = p2(rest)?;
-        Ok((rest, (r1, r2)))
     }
 }
 
@@ -298,8 +285,8 @@ where
 }
 
 /// double parses a signed floating point number from the input
-pub fn double() -> impl Fn(&str) -> ParseResult<f64> {
-    |input: &str| {
+pub fn double<'a>() -> impl Parser<'a, f64> {
+    |input: Input<'a>| {
         let bytes = input.as_bytes();
         if bytes.is_empty() {
             return Err("expected at least one digit");
@@ -353,8 +340,8 @@ pub fn double() -> impl Fn(&str) -> ParseResult<f64> {
 }
 
 /// integer parses a signed integer from the input
-pub fn integer() -> impl Fn(&str) -> ParseResult<i64> {
-    |input: &str| {
+pub fn integer<'a>() -> impl Parser<'a, i64> {
+    |input: Input<'a>| {
         let bytes = input.as_bytes();
         if bytes.is_empty() {
             return Err("expected at least one digit");
@@ -392,7 +379,7 @@ pub fn integer() -> impl Fn(&str) -> ParseResult<i64> {
     }
 }
 
-pub fn digit01() -> impl Fn(&str) -> ParseResult<&str> {
+pub fn digit01<'a>() -> impl Parser<'a, &'a str> {
     take_while(|c| c.is_ascii_digit())
 }
 
@@ -603,8 +590,8 @@ where
 }
 
 /// take consumes a specific number of characters from the input
-pub fn take(count: usize) -> impl Fn(&str) -> ParseResult<&str> {
-    move |input: &str| {
+pub fn take<'a>(count: usize) -> impl Parser<'a, &'a str> {
+    move |input: Input<'a>| {
         if input.len() >= count {
             Ok((&input[count..], &input[..count]))
         } else {

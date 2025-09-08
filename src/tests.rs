@@ -68,33 +68,6 @@ mod tests {
     }
 
     #[test]
-    fn test_seq_success() {
-        let p1 = char('a');
-        let p2 = char('b');
-        let parser = seq(p1, p2);
-        let result = parser("abc");
-        assert_eq!(result, Ok(("c", ('a', 'b'))));
-    }
-
-    #[test]
-    fn test_seq_first_fails() {
-        let p1 = char('a');
-        let p2 = char('b');
-        let parser = seq(p1, p2);
-        let result = parser("xbc");
-        assert_eq!(result, Err("char mismatch"));
-    }
-
-    #[test]
-    fn test_seq_second_fails() {
-        let p1 = char('a');
-        let p2 = char('b');
-        let parser = seq(p1, p2);
-        let result = parser("axc");
-        assert_eq!(result, Err("char mismatch"));
-    }
-
-    #[test]
     fn test_or_first_succeeds() {
         let p1 = char('a');
         let p2 = char('b');
