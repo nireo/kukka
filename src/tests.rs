@@ -7,63 +7,63 @@ mod tests {
     #[test]
     fn test_char_success() {
         let parser = char('a');
-        let result = parser("abc");
+        let result = parser.parse("abc");
         assert_eq!(result, Ok(("bc", 'a')));
     }
 
     #[test]
     fn test_char_failure() {
         let parser = char('a');
-        let result = parser("bc");
+        let result = parser.parse("bc");
         assert_eq!(result, Err("char mismatch"));
     }
 
     #[test]
     fn test_char_empty_input() {
         let parser = char('a');
-        let result = parser("");
+        let result = parser.parse("");
         assert_eq!(result, Err("char mismatch"));
     }
 
     #[test]
     fn test_char_single_char() {
         let parser = char('x');
-        let result = parser("x");
+        let result = parser.parse("x");
         assert_eq!(result, Ok(("", 'x')));
     }
 
     #[test]
     fn test_string_success() {
         let parser = string("hello");
-        let result = parser("hello world");
+        let result = parser.parse("hello world");
         assert_eq!(result, Ok((" world", "hello")));
     }
 
     #[test]
     fn test_string_failure() {
         let parser = string("hello");
-        let result = parser("hi world");
+        let result = parser.parse("hi world");
         assert_eq!(result, Err("string mismatch"));
     }
 
     #[test]
     fn test_string_exact_match() {
         let parser = string("test");
-        let result = parser("test");
+        let result = parser.parse("test");
         assert_eq!(result, Ok(("", "test")));
     }
 
     #[test]
     fn test_string_partial_match() {
         let parser = string("hello");
-        let result = parser("hell");
+        let result = parser.parse("hell");
         assert_eq!(result, Err("string mismatch"));
     }
 
     #[test]
     fn test_string_empty_string() {
         let parser = string("");
-        let result = parser("anything");
+        let result = parser.parse("anything");
         assert_eq!(result, Ok(("anything", "")));
     }
 

@@ -31,6 +31,7 @@ where
 }
 
 /// multispace0 matches zero or more whitespace characters (space, tab, newline, carriage return)
+#[inline(always)]
 pub fn multispace0<'a>() -> impl Parser<'a, &'a str> {
     |input: Input<'a>| {
         let bytes = input.as_bytes();
@@ -48,6 +49,7 @@ pub fn multispace0<'a>() -> impl Parser<'a, &'a str> {
 }
 
 /// multispace1 is like multispace0, but requires at least one whitespace character
+#[inline(always)]
 pub fn multispace1<'a>() -> impl Parser<'a, &'a str> {
     |input: Input<'a>| {
         let (rest, matched) = multispace0().parse(input)?;
