@@ -19,20 +19,19 @@ fn parse_boolean<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
     or(
         value(string("true"), || Node::Boolean(true)),
         value(string("false"), || Node::Boolean(false)),
-    )
-    .parse(data)
+    )(data)
 }
 
 fn parse_null<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
-    value(string("null"), || Node::Null).parse(data)
+    value(string("null"), || Node::Null)(data)
 }
 
 fn parse_string_inner<'a>(data: &'a str) -> ParseResult<'a, &'a str> {
-    delimited(char('"'), take_while(|c| c != '"'), char('"')).parse(data)
+    delimited(char('"'), take_while(|c| c != '"'), char('"'))(data)
 }
 
 fn parse_string<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
-    map(parse_string_inner, |s| Node::String(s)).parse(data)
+    map(parse_string_inner, |s| Node::String(s))(data)
 }
 
 fn parse_object<'a>(json: &'a str) -> ParseResult<'a, Node<'a>> {
@@ -51,8 +50,7 @@ fn parse_object<'a>(json: &'a str) -> ParseResult<'a, Node<'a>> {
             char('}'),
         ),
         |v| Node::Object(Rc::new(v)),
-    )
-    .parse(json)
+    )(json)
 }
 
 fn parse_array<'a>(json: &'a str) -> ParseResult<'a, Node<'a>> {
@@ -66,12 +64,11 @@ fn parse_array<'a>(json: &'a str) -> ParseResult<'a, Node<'a>> {
             char(']'),
         ),
         |val| Node::Array(Rc::new(val)),
-    )
-    .parse(json)
+    )(json)
 }
 
 fn parse_number<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
-    map(integer(), |n| Node::Number(n)).parse(data)
+    map(integer(), |n| Node::Number(n))(data)
 }
 
 fn parse_json<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
@@ -86,8 +83,7 @@ fn parse_json<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
             parse_boolean,
         ),
         multispace0(),
-    )
-    .parse(data)
+    )(data)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
