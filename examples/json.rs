@@ -7,7 +7,7 @@ use std::{error::Error, fs};
 enum Node<'a> {
     Null,
     Boolean(bool),
-    Number(i64),
+    Number(f64),
     String(&'a str),
 
     // since we are using the hashmap the actual order of the objects is not preserved.
@@ -68,7 +68,7 @@ fn parse_array<'a>(json: &'a str) -> ParseResult<'a, Node<'a>> {
 }
 
 fn parse_number<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {
-    map(integer(), |n| Node::Number(n))(data)
+    map(double(), |n| Node::Number(n))(data)
 }
 
 fn parse_json<'a>(data: &'a str) -> ParseResult<'a, Node<'a>> {

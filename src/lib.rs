@@ -76,7 +76,7 @@ where
 }
 
 /// Tries to apply the parser `p`. If it fails, it returns the provided default value without
-/// consuming any input. This will clone the default value. TODO: avoid cloning if possible.
+/// consuming any input. This will clone the default value.
 pub fn or_default<'a, P, O, D>(p: P, default: D) -> impl Fn(Input<'a>) -> ParseResult<'a, O>
 where
     P: Fn(Input<'a>) -> ParseResult<'a, O>,
@@ -94,16 +94,6 @@ pub fn or<'a, P1, P2, O>(p1: P1, p2: P2) -> impl Fn(Input<'a>) -> ParseResult<'a
 where
     P1: Fn(Input<'a>) -> ParseResult<'a, O>,
     P2: Fn(Input<'a>) -> ParseResult<'a, O>,
-{
-    move |input: Input<'a>| match p1(input) {
-        Ok((rest, res)) => Ok((rest, res)),
-        Err(_) => p2(input),
-    }
-}
-
-pub fn or2<'a, P, O>(p1: P, p2: P) -> impl Fn(Input<'a>) -> ParseResult<'a, O>
-where
-    P: Fn(Input<'a>) -> ParseResult<'a, O>,
 {
     move |input: Input<'a>| match p1(input) {
         Ok((rest, res)) => Ok((rest, res)),
