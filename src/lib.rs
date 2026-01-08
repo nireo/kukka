@@ -1,3 +1,4 @@
+use std::fmt;
 use std::hash::Hash;
 
 use memchr::memchr;
@@ -10,11 +11,43 @@ const VECTOR_INITIAL_CAPACITY: usize = 10;
 pub type Input<'a> = &'a str;
 
 /// a parser returns a new reference to the string that the next parsers should parse from the
-/// result also contains some data given by a parser if it was successful. Other than that, we
-/// return a basic static string error.
-///
-/// TODO: implement proper errors
-pub type ParseResult<'a, T> = Result<(Input<'a>, T), &'static str>;
+/// result also contains some data given by a parser if it was successful.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseError {
+    CharMismatch,
+    StringMismatch,
+    ExpectedWhitespace,
+    ValueParserMismatch,
+    ExpectedAtLeastOne,
+    ExpectedElementAfterSeparator,
+    ExpectedAtLeastOneDigit,
+    ExpectedDigitsAfterSign,
+    NoAlternativeMatched,
+    NotEnoughInputToTake,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            ParseError::CharMismatch => "char mismatch",
+            ParseError::StringMismatch => "string mismatch",
+            ParseError::ExpectedWhitespace => "expected at least one whitespace character",
+            ParseError::ValueParserMismatch => "didnt match value parser",
+            ParseError::ExpectedAtLeastOne => "could not parse once",
+            ParseError::ExpectedElementAfterSeparator => "expected element after separator",
+            ParseError::ExpectedAtLeastOneDigit => "expected at least one digit",
+            ParseError::ExpectedDigitsAfterSign => "expected digits after sign",
+            ParseError::NoAlternativeMatched => "no alternative matched",
+            ParseError::NotEnoughInputToTake => "not enough input to take",
+        };
+
+        f.write_str(message)
+    }
+}
+
+impl std::error::Error for ParseError {}
+
+pub type ParseResult<'a, T> = Result<(Input<'a>, T), ParseError>;
 
 /// A Parser is a function that takes an input string and returns a ParseResult.
 pub trait Parser<'a, Out> {
@@ -54,7 +87,7 @@ pub fn multispace1<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
     |input: Input<'a>| {
         let (rest, matched) = multispace0()(input)?;
         if matched.is_empty() {
-            Err("expected at least one whitespace character")
+            Err(ParseError::ExpectedWhitespace)
         } else {
             Ok((rest, matched))
         }
@@ -71,7 +104,7 @@ where
 {
     move |input: Input<'a>| match p(input) {
         Ok((rest, _)) => Ok((rest, val_fn())),
-        Err(_) => Err("didnt match value parser"),
+        Err(_) => Err(ParseError::ValueParserMismatch),
     }
 }
 
@@ -160,7 +193,7 @@ pub fn char<'a>(expected: char) -> impl Fn(Input<'a>) -> ParseResult<'a, char> {
         if input.as_bytes().first() == Some(&(expected as u8)) {
             return Ok((&input[1..], expected));
         } else {
-            return Err("char mismatch");
+            return Err(ParseError::CharMismatch);
         }
     }
 }
@@ -172,7 +205,7 @@ pub fn string<'a>(expected: &'static str) -> impl Fn(Input<'a>) -> ParseResult<'
         if input.starts_with(expected) {
             Ok((&input[expected.len()..], &input[..expected.len()]))
         } else {
-            Err("string mismatch")
+            Err(ParseError::StringMismatch)
         }
     }
 }
@@ -236,7 +269,7 @@ where
 
                 Ok((input, res))
             }
-            Err(_) => Err("could not parse once"),
+            Err(_) => Err(ParseError::ExpectedAtLeastOne),
         }
     }
 }
@@ -276,7 +309,7 @@ where
                             input = rest;
                         }
                         Err(_) => {
-                            return Err("expected element after separator");
+                            return Err(ParseError::ExpectedElementAfterSeparator);
                         }
                     }
                 }
@@ -294,7 +327,7 @@ pub fn double<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, f64> {
     |input: Input<'a>| {
         let bytes = input.as_bytes();
         if bytes.is_empty() {
-            return Err("expected at least one digit");
+            return Err(ParseError::ExpectedAtLeastOneDigit);
         }
 
         let mut result = 0f64;
@@ -307,7 +340,7 @@ pub fn double<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, f64> {
         }
 
         if pos >= bytes.len() {
-            return Err("expected digits after sign");
+            return Err(ParseError::ExpectedDigitsAfterSign);
         }
 
         while pos < bytes.len() {
@@ -336,7 +369,7 @@ pub fn double<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, f64> {
         }
 
         if pos == if negative { 1 } else { 0 } {
-            return Err("expected at least one digit");
+            return Err(ParseError::ExpectedAtLeastOneDigit);
         }
 
         let final_result = if negative { -result } else { result };
@@ -349,7 +382,7 @@ pub fn integer<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, i64> {
     |input: Input<'a>| {
         let bytes = input.as_bytes();
         if bytes.is_empty() {
-            return Err("expected at least one digit");
+            return Err(ParseError::ExpectedAtLeastOneDigit);
         }
 
         let mut result = 0i64;
@@ -362,7 +395,7 @@ pub fn integer<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, i64> {
         }
 
         if pos >= bytes.len() {
-            return Err("expected digits after sign");
+            return Err(ParseError::ExpectedDigitsAfterSign);
         }
 
         while pos < bytes.len() {
@@ -376,7 +409,7 @@ pub fn integer<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, i64> {
         }
 
         if pos == if negative { 1 } else { 0 } {
-            return Err("expected at least one digit");
+            return Err(ParseError::ExpectedAtLeastOneDigit);
         }
 
         let final_result = if negative { -result } else { result };
@@ -463,7 +496,7 @@ where
                             map.insert(key, value);
                             input = rest;
                         }
-                        Err(_) => return Err("expected element after separator"),
+                        Err(_) => return Err(ParseError::ExpectedElementAfterSeparator),
                     }
                 }
                 Err(_) => break,
@@ -498,7 +531,7 @@ where
                             input = rest;
                         }
                         Err(_) => {
-                            return Err("expected element after separator");
+                            return Err(ParseError::ExpectedElementAfterSeparator);
                         }
                     }
                 }
@@ -522,7 +555,7 @@ macro_rules! alt {
                             Err(_) => {}
                         }
                     )*
-                    Err("no alternative matched")
+                    Err(ParseError::NoAlternativeMatched)
                 }
             }
         }
@@ -588,7 +621,7 @@ where
                 acc = f(acc, result);
                 input = rest;
             }
-            Err(_) => return Err("could not parse once"),
+            Err(_) => return Err(ParseError::ExpectedAtLeastOne),
         }
 
         loop {
@@ -611,7 +644,7 @@ pub fn take<'a>(count: usize) -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> 
         if input.len() >= count {
             Ok((&input[count..], &input[..count]))
         } else {
-            Err("not enough input to take")
+            Err(ParseError::NotEnoughInputToTake)
         }
     }
 }

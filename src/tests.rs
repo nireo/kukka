@@ -15,14 +15,14 @@ mod tests {
     fn test_char_failure() {
         let parser = char('a');
         let result = parser.parse("bc");
-        assert_eq!(result, Err("char mismatch"));
+        assert_eq!(result, Err(ParseError::CharMismatch));
     }
 
     #[test]
     fn test_char_empty_input() {
         let parser = char('a');
         let result = parser.parse("");
-        assert_eq!(result, Err("char mismatch"));
+        assert_eq!(result, Err(ParseError::CharMismatch));
     }
 
     #[test]
@@ -43,7 +43,7 @@ mod tests {
     fn test_string_failure() {
         let parser = string("hello");
         let result = parser.parse("hi world");
-        assert_eq!(result, Err("string mismatch"));
+        assert_eq!(result, Err(ParseError::StringMismatch));
     }
 
     #[test]
@@ -57,7 +57,7 @@ mod tests {
     fn test_string_partial_match() {
         let parser = string("hello");
         let result = parser.parse("hell");
-        assert_eq!(result, Err("string mismatch"));
+        assert_eq!(result, Err(ParseError::StringMismatch));
     }
 
     #[test]
@@ -91,7 +91,7 @@ mod tests {
         let p2 = char('b');
         let parser = or(p1, p2);
         let result = parser.parse("cde");
-        assert_eq!(result, Err("char mismatch"));
+        assert_eq!(result, Err(ParseError::CharMismatch));
     }
 
     #[test]
@@ -179,7 +179,7 @@ mod tests {
         let parser = separated(digit, comma);
 
         let result = parser.parse("1,1,");
-        assert_eq!(result, Err("expected element after separator"));
+        assert_eq!(result, Err(ParseError::ExpectedElementAfterSeparator));
     }
 
     #[test]
@@ -189,7 +189,7 @@ mod tests {
         let parser = separated1(digit, comma);
 
         let result = parser.parse("abc");
-        assert_eq!(result, Err("char mismatch"));
+        assert_eq!(result, Err(ParseError::CharMismatch));
     }
 
     #[test]
