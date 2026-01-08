@@ -33,6 +33,14 @@ mod tests {
     }
 
     #[test]
+    fn test_char_bytes() {
+        let parser = char(b'a');
+        let input: &[u8] = b"abc";
+        let result = parser.parse(input);
+        assert_eq!(result, Ok((&b"bc"[..], b'a')));
+    }
+
+    #[test]
     fn test_string_success() {
         let parser = string("hello");
         let result = parser.parse("hello world");
@@ -65,6 +73,15 @@ mod tests {
         let parser = string("");
         let result = parser.parse("anything");
         assert_eq!(result, Ok(("anything", "")));
+    }
+
+    #[test]
+    fn test_string_bytes() {
+        let expected: &[u8] = b"hi";
+        let parser = string(expected);
+        let input: &[u8] = b"hi!!";
+        let result = parser.parse(input);
+        assert_eq!(result, Ok((&b"!!"[..], &b"hi"[..])));
     }
 
     #[test]
@@ -342,7 +359,7 @@ mod tests {
     #[test]
     fn test_fold_many_string_concat() {
         let parser = fold_many0(
-            map(char('a'), |c| c.to_string()),
+            map(char('a'), |c: char| c.to_string()),
             String::new(),
             |mut acc, s| {
                 acc.push_str(&s);

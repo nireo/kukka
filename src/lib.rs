@@ -7,10 +7,121 @@ use rustc_hash::FxHashMap;
 /// initial capacity for vectors to avoid reallocations
 const VECTOR_INITIAL_CAPACITY: usize = 10;
 
-/// input just contains a reference to a string. this is done to prevent copying.
-pub type Input<'a> = &'a str;
+/// Input is a lightweight abstraction over &str and &[u8].
+pub trait Input: Copy {
+    type Item: Copy;
+    type Slice: Copy + AsRef<[u8]>;
+    type Iter: Iterator<Item = (usize, Self::Item)>;
 
-/// a parser returns a new reference to the string that the next parsers should parse from the
+    fn len(self) -> usize;
+    fn split_at(self, mid: usize) -> (Self, Self);
+    fn first(self) -> Option<Self::Item>;
+    fn starts_with(self, prefix: Self::Slice) -> bool;
+    fn iter_indices(self) -> Self::Iter;
+    fn item_len(item: Self::Item) -> usize;
+    fn as_slice(self) -> Self::Slice;
+    fn find_item(self, item: Self::Item) -> Option<usize>;
+}
+
+impl<'a> Input for &'a str {
+    type Item = char;
+    type Slice = &'a str;
+    type Iter = std::str::CharIndices<'a>;
+
+    fn len(self) -> usize {
+        self.len()
+    }
+
+    fn split_at(self, mid: usize) -> (Self, Self) {
+        self.split_at(mid)
+    }
+
+    fn first(self) -> Option<Self::Item> {
+        self.chars().next()
+    }
+
+    fn starts_with(self, prefix: Self::Slice) -> bool {
+        self.starts_with(prefix)
+    }
+
+    fn iter_indices(self) -> Self::Iter {
+        self.char_indices()
+    }
+
+    fn item_len(item: Self::Item) -> usize {
+        item.len_utf8()
+    }
+
+    fn as_slice(self) -> Self::Slice {
+        self
+    }
+
+    fn find_item(self, item: Self::Item) -> Option<usize> {
+        if item.is_ascii() {
+            memchr(item as u8, self.as_bytes())
+        } else {
+            self.char_indices()
+                .find(|(_, c)| *c == item)
+                .map(|(idx, _)| idx)
+        }
+    }
+}
+
+impl<'a> Input for &'a [u8] {
+    type Item = u8;
+    type Slice = &'a [u8];
+    type Iter = std::iter::Enumerate<std::iter::Copied<std::slice::Iter<'a, u8>>>;
+
+    fn len(self) -> usize {
+        self.len()
+    }
+
+    fn split_at(self, mid: usize) -> (Self, Self) {
+        self.split_at(mid)
+    }
+
+    fn first(self) -> Option<Self::Item> {
+        self.first().copied()
+    }
+
+    fn starts_with(self, prefix: Self::Slice) -> bool {
+        self.starts_with(prefix)
+    }
+
+    fn iter_indices(self) -> Self::Iter {
+        self.iter().copied().enumerate()
+    }
+
+    fn item_len(_: Self::Item) -> usize {
+        1
+    }
+
+    fn as_slice(self) -> Self::Slice {
+        self
+    }
+
+    fn find_item(self, item: Self::Item) -> Option<usize> {
+        memchr(item, self)
+    }
+}
+
+pub trait AsciiDigit: Copy {
+    fn is_ascii_digit(self) -> bool;
+}
+
+impl AsciiDigit for char {
+    fn is_ascii_digit(self) -> bool {
+        char::is_ascii_digit(&self)
+    }
+}
+
+impl AsciiDigit for u8 {
+    fn is_ascii_digit(self) -> bool {
+        u8::is_ascii_digit(&self)
+    }
+}
+
+/// a parser returns a new reference to the input that the next parsers should parse from the
 /// result also contains some data given by a parser if it was successful.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseError {
@@ -47,27 +158,28 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-pub type ParseResult<'a, T> = Result<(Input<'a>, T), ParseError>;
+pub type ParseResult<I, T> = Result<(I, T), ParseError>;
 
-/// A Parser is a function that takes an input string and returns a ParseResult.
-pub trait Parser<'a, Out> {
-    fn parse(&self, input: Input<'a>) -> ParseResult<'a, Out>;
+/// A Parser is a function that takes an input slice and returns a ParseResult.
+pub trait Parser<I, Out> {
+    fn parse(&self, input: I) -> ParseResult<I, Out>;
 }
 
-impl<'a, F, Out> Parser<'a, Out> for F
+impl<I, F, Out> Parser<I, Out> for F
 where
-    F: Fn(Input<'a>) -> ParseResult<'a, Out>,
+    F: Fn(I) -> ParseResult<I, Out>,
 {
-    fn parse(&self, input: Input<'a>) -> ParseResult<'a, Out> {
+    fn parse(&self, input: I) -> ParseResult<I, Out> {
         self(input)
     }
 }
 
 /// multispace0 matches zero or more whitespace characters (space, tab, newline, carriage return)
 #[inline(always)]
-pub fn multispace0<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
-    |input: Input<'a>| {
-        let bytes = input.as_bytes();
+pub fn multispace0<I: Input>() -> impl Fn(I) -> ParseResult<I, I> {
+    |input: I| {
+        let slice = input.as_slice();
+        let bytes = slice.as_ref();
         let mut end_pos = 0;
 
         while end_pos < bytes.len() {
@@ -77,16 +189,17 @@ pub fn multispace0<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
             }
         }
 
-        Ok((&input[end_pos..], &input[..end_pos]))
+        let (matched, rest) = input.split_at(end_pos);
+        Ok((rest, matched))
     }
 }
 
 /// multispace1 is like multispace0, but requires at least one whitespace character
 #[inline(always)]
-pub fn multispace1<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
-    |input: Input<'a>| {
+pub fn multispace1<I: Input>() -> impl Fn(I) -> ParseResult<I, I> {
+    |input: I| {
         let (rest, matched) = multispace0()(input)?;
-        if matched.is_empty() {
+        if matched.len() == 0 {
             Err(ParseError::ExpectedWhitespace)
         } else {
             Ok((rest, matched))
@@ -97,12 +210,13 @@ pub fn multispace1<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
 /// Value returns a given value given to the function if the parser is successful, think of it as a
 /// more ergonomic 'map'
 #[inline(always)]
-pub fn value<'a, P, F, O, V>(p: P, val_fn: F) -> impl Fn(Input<'a>) -> ParseResult<'a, V>
+pub fn value<I, P, F, O, V>(p: P, val_fn: F) -> impl Fn(I) -> ParseResult<I, V>
 where
-    P: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P: Fn(I) -> ParseResult<I, O>,
     F: Fn() -> V,
 {
-    move |input: Input<'a>| match p(input) {
+    move |input: I| match p(input) {
         Ok((rest, _)) => Ok((rest, val_fn())),
         Err(_) => Err(ParseError::ValueParserMismatch),
     }
@@ -110,12 +224,13 @@ where
 
 /// Tries to apply the parser `p`. If it fails, it returns the provided default value without
 /// consuming any input. This will clone the default value.
-pub fn or_default<'a, P, O, D>(p: P, default: D) -> impl Fn(Input<'a>) -> ParseResult<'a, O>
+pub fn or_default<I, P, O, D>(p: P, default: D) -> impl Fn(I) -> ParseResult<I, O>
 where
-    P: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P: Fn(I) -> ParseResult<I, O>,
     D: Fn() -> O,
 {
-    move |input: Input<'a>| match p(input) {
+    move |input: I| match p(input) {
         Ok((rest, res)) => Ok((rest, res)),
         Err(_) => Ok((input, default())),
     }
@@ -123,24 +238,26 @@ where
 
 /// or tries to apply the first parser, if it fails, it tries the second parser
 #[inline(always)]
-pub fn or<'a, P1, P2, O>(p1: P1, p2: P2) -> impl Fn(Input<'a>) -> ParseResult<'a, O>
+pub fn or<I, P1, P2, O>(p1: P1, p2: P2) -> impl Fn(I) -> ParseResult<I, O>
 where
-    P1: Fn(Input<'a>) -> ParseResult<'a, O>,
-    P2: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P1: Fn(I) -> ParseResult<I, O>,
+    P2: Fn(I) -> ParseResult<I, O>,
 {
-    move |input: Input<'a>| match p1(input) {
+    move |input: I| match p1(input) {
         Ok((rest, res)) => Ok((rest, res)),
         Err(_) => p2(input),
     }
 }
 
 /// and applies two parsers in sequence and returns a tuple of their results
-pub fn and<'a, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(Input<'a>) -> ParseResult<'a, (O1, O2)>
+pub fn and<I, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(I) -> ParseResult<I, (O1, O2)>
 where
-    P1: Fn(Input<'a>) -> ParseResult<'a, O1>,
-    P2: Fn(Input<'a>) -> ParseResult<'a, O2>,
+    I: Input,
+    P1: Fn(I) -> ParseResult<I, O1>,
+    P2: Fn(I) -> ParseResult<I, O2>,
 {
-    move |input: Input<'a>| {
+    move |input: I| {
         let (rest, r1) = p1(input)?;
         let (rest, r2) = p2(rest)?;
         Ok((rest, (r1, r2)))
@@ -148,62 +265,72 @@ where
 }
 
 /// take_while consumes input while the predicate is true. If the predicate is false at the start
-/// of the input, an empty string is returned.
-pub fn take_while<'a, F>(p: F) -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str>
+/// of the input, an empty slice is returned.
+pub fn take_while<I, F>(p: F) -> impl Fn(I) -> ParseResult<I, I>
 where
-    F: Fn(char) -> bool,
+    I: Input,
+    F: Fn(I::Item) -> bool,
 {
-    move |input: Input<'a>| {
-        let bytes = input.as_bytes();
+    move |input: I| {
         let mut end_pos = 0;
 
-        for &byte in bytes {
-            if byte > 127 || !p(byte as char) {
+        for (idx, item) in input.iter_indices() {
+            if !p(item) {
                 break;
             }
-            end_pos += 1;
+            end_pos = idx + I::item_len(item);
         }
 
-        if end_pos < bytes.len() && bytes[end_pos] > 127 {
-            end_pos = input
-                .char_indices()
-                .skip_while(|(i, _)| *i < end_pos)
-                .find(|(_, c)| !p(*c))
-                .map(|(pos, _)| pos)
-                .unwrap_or(input.len());
-        }
-
-        Ok((&input[end_pos..], &input[..end_pos]))
+        let (matched, rest) = input.split_at(end_pos);
+        Ok((rest, matched))
     }
 }
 
-/// take_until consumes input until the target character is found. The target character is not
-/// consumed. If the target character is not found, the entire input is consumed.
-pub fn take_until<'a>(target: char) -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
-    move |input: Input<'a>| match memchr(target as u8, input.as_bytes()) {
-        Some(pos) => Ok((&input[pos..], &input[..pos])),
-        None => Ok(("", input)),
+/// take_until consumes input until the target item is found. The target item is not consumed. If
+/// the target item is not found, the entire input is consumed.
+pub fn take_until<I>(target: I::Item) -> impl Fn(I) -> ParseResult<I, I>
+where
+    I: Input,
+    I::Item: PartialEq,
+{
+    move |input: I| {
+        let end_pos = input.find_item(target).unwrap_or_else(|| input.len());
+
+        let (matched, rest) = input.split_at(end_pos);
+        Ok((rest, matched))
     }
 }
 
-/// char matches a specific character at the start of the input
+/// char matches a specific item at the start of the input
 #[inline(always)]
-pub fn char<'a>(expected: char) -> impl Fn(Input<'a>) -> ParseResult<'a, char> {
-    move |input: Input<'a>| {
-        if input.as_bytes().first() == Some(&(expected as u8)) {
-            return Ok((&input[1..], expected));
-        } else {
-            return Err(ParseError::CharMismatch);
+pub fn char<I>(expected: I::Item) -> impl Fn(I) -> ParseResult<I, I::Item>
+where
+    I: Input,
+    I::Item: PartialEq,
+{
+    move |input: I| {
+        if let Some(found) = input.first() {
+            if found == expected {
+                let (_, rest) = input.split_at(I::item_len(found));
+                return Ok((rest, found));
+            }
         }
+
+        Err(ParseError::CharMismatch)
     }
 }
 
-/// string matches a specific string at the start of the input
+/// string matches a specific slice at the start of the input
 #[inline(always)]
-pub fn string<'a>(expected: &'static str) -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
-    move |input: Input<'a>| {
+pub fn string<I>(expected: I::Slice) -> impl Fn(I) -> ParseResult<I, I>
+where
+    I: Input,
+{
+    move |input: I| {
         if input.starts_with(expected) {
-            Ok((&input[expected.len()..], &input[..expected.len()]))
+            let len = expected.as_ref().len();
+            let (matched, rest) = input.split_at(len);
+            Ok((rest, matched))
         } else {
             Err(ParseError::StringMismatch)
         }
@@ -211,11 +338,12 @@ pub fn string<'a>(expected: &'static str) -> impl Fn(Input<'a>) -> ParseResult<'
 }
 
 /// many applies a parser zero or more times and collects the results in a vector
-pub fn many<'a, P, O>(parser: P) -> impl Fn(Input<'a>) -> ParseResult<'a, Vec<O>>
+pub fn many<I, P, O>(parser: P) -> impl Fn(I) -> ParseResult<I, Vec<O>>
 where
-    P: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P: Fn(I) -> ParseResult<I, O>,
 {
-    move |mut input: Input<'a>| {
+    move |mut input: I| {
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
 
         loop {
@@ -234,12 +362,13 @@ where
 
 /// map applies a function to the output of a parser
 #[inline(always)]
-pub fn map<'a, P, O1, O2, F>(parser: P, f: F) -> impl Fn(Input<'a>) -> ParseResult<'a, O2>
+pub fn map<I, P, O1, O2, F>(parser: P, f: F) -> impl Fn(I) -> ParseResult<I, O2>
 where
-    P: Fn(Input<'a>) -> ParseResult<'a, O1>,
+    I: Input,
+    P: Fn(I) -> ParseResult<I, O1>,
     F: Fn(O1) -> O2,
 {
-    move |input: Input<'a>| {
+    move |input: I| {
         let (rest, result) = parser(input)?;
         Ok((rest, f(result)))
     }
@@ -247,11 +376,12 @@ where
 
 /// many1 applies a parser one or more times and collects the results in a vector. If the parser
 /// does not match at least once, an error is returned.
-pub fn many1<'a, P, O>(parser: P) -> impl Fn(Input<'a>) -> ParseResult<'a, Vec<O>>
+pub fn many1<I, P, O>(parser: P) -> impl Fn(I) -> ParseResult<I, Vec<O>>
 where
-    P: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P: Fn(I) -> ParseResult<I, O>,
 {
-    move |mut input: Input<'a>| {
+    move |mut input: I| {
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
         match parser(input) {
             Ok((rest, result)) => {
@@ -278,15 +408,13 @@ where
 /// of the first parser are collected into a vector. The separator parser is not included in the
 /// results. If the first parser does not match at least once, an empty vector is returned
 /// instead.
-pub fn separated<'a, P1, P2, O1, O2>(
-    p1: P1,
-    p2: P2,
-) -> impl Fn(Input<'a>) -> ParseResult<'a, Vec<O1>>
+pub fn separated<I, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(I) -> ParseResult<I, Vec<O1>>
 where
-    P1: Fn(Input<'a>) -> ParseResult<'a, O1>,
-    P2: Fn(Input<'a>) -> ParseResult<'a, O2>,
+    I: Input,
+    P1: Fn(I) -> ParseResult<I, O1>,
+    P2: Fn(I) -> ParseResult<I, O2>,
 {
-    move |mut input: Input<'a>| {
+    move |mut input: I| {
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
 
         match p1(input) {
@@ -323,9 +451,10 @@ where
 }
 
 /// double parses a signed floating point number from the input
-pub fn double<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, f64> {
-    |input: Input<'a>| {
-        let bytes = input.as_bytes();
+pub fn double<I: Input>() -> impl Fn(I) -> ParseResult<I, f64> {
+    |input: I| {
+        let slice = input.as_slice();
+        let bytes = slice.as_ref();
         if bytes.is_empty() {
             return Err(ParseError::ExpectedAtLeastOneDigit);
         }
@@ -373,14 +502,16 @@ pub fn double<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, f64> {
         }
 
         let final_result = if negative { -result } else { result };
-        Ok((&input[pos..], final_result))
+        let (_, rest) = input.split_at(pos);
+        Ok((rest, final_result))
     }
 }
 
 /// integer parses a signed integer from the input
-pub fn integer<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, i64> {
-    |input: Input<'a>| {
-        let bytes = input.as_bytes();
+pub fn integer<I: Input>() -> impl Fn(I) -> ParseResult<I, i64> {
+    |input: I| {
+        let slice = input.as_slice();
+        let bytes = slice.as_ref();
         if bytes.is_empty() {
             return Err(ParseError::ExpectedAtLeastOneDigit);
         }
@@ -413,28 +544,34 @@ pub fn integer<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, i64> {
         }
 
         let final_result = if negative { -result } else { result };
-        Ok((&input[pos..], final_result))
+        let (_, rest) = input.split_at(pos);
+        Ok((rest, final_result))
     }
 }
 
-pub fn digit01<'a>() -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
-    take_while(|c| c.is_ascii_digit())
+pub fn digit01<I>() -> impl Fn(I) -> ParseResult<I, I>
+where
+    I: Input,
+    I::Item: AsciiDigit,
+{
+    take_while(|c: I::Item| c.is_ascii_digit())
 }
 
 /// delimited requires that all three parsers pass, but it returns the value from the second
 /// function this is especially useful for example reading the content of a string which is
 /// surrounded by "" and then being able to map to that value
-pub fn delimited<'a, P1, P2, P3, O1, O2, O3>(
+pub fn delimited<I, P1, P2, P3, O1, O2, O3>(
     first_delim: P1,
     inner: P2,
     second_delim: P3,
-) -> impl Fn(Input<'a>) -> ParseResult<'a, O2>
+) -> impl Fn(I) -> ParseResult<I, O2>
 where
-    P1: Fn(Input<'a>) -> ParseResult<'a, O1>,
-    P2: Fn(Input<'a>) -> ParseResult<'a, O2>,
-    P3: Fn(Input<'a>) -> ParseResult<'a, O3>,
+    I: Input,
+    P1: Fn(I) -> ParseResult<I, O1>,
+    P2: Fn(I) -> ParseResult<I, O2>,
+    P3: Fn(I) -> ParseResult<I, O3>,
 {
-    move |input: Input<'a>| {
+    move |input: I| {
         let (rest, _) = first_delim(input)?;
         let (rest, out) = inner(rest)?;
         let (rest, _) = second_delim(rest)?;
@@ -445,17 +582,18 @@ where
 /// separated_pair applies three parsers in sequence, but only returns the results of the first
 /// and third parser. This is useful for example when parsing key-value pairs where the key and
 /// value are separated by a colon or equals sign.
-pub fn separated_pair<'a, P1, P2, P3, O1, O2, O3>(
+pub fn separated_pair<I, P1, P2, P3, O1, O2, O3>(
     p1: P1,
     p2: P2,
     p3: P3,
-) -> impl Fn(Input<'a>) -> ParseResult<'a, (O1, O3)>
+) -> impl Fn(I) -> ParseResult<I, (O1, O3)>
 where
-    P1: Fn(Input<'a>) -> ParseResult<'a, O1>,
-    P2: Fn(Input<'a>) -> ParseResult<'a, O2>,
-    P3: Fn(Input<'a>) -> ParseResult<'a, O3>,
+    I: Input,
+    P1: Fn(I) -> ParseResult<I, O1>,
+    P2: Fn(I) -> ParseResult<I, O2>,
+    P3: Fn(I) -> ParseResult<I, O3>,
 {
-    move |input: Input<'a>| {
+    move |input: I| {
         let (rest, out1) = p1(input)?;
         let (rest, _) = p2(rest)?;
         let (rest, out3) = p3(rest)?;
@@ -467,17 +605,18 @@ where
 /// and value. The results are collected into a HashMap. If the same key is found
 /// multiple times, the last value is kept. The capacity_hint is used to initialize the
 /// HashMap with a certain capacity to avoid reallocations.
-pub fn separated_into_map<'a, P1, P2, O, K, V>(
+pub fn separated_into_map<I, P1, P2, O, K, V>(
     p1: P1,
     p2: P2,
     capacity_hint: usize,
-) -> impl Fn(Input<'a>) -> ParseResult<'a, FxHashMap<K, V>>
+) -> impl Fn(I) -> ParseResult<I, FxHashMap<K, V>>
 where
-    P1: Fn(Input<'a>) -> ParseResult<'a, (K, V)>,
-    P2: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P1: Fn(I) -> ParseResult<I, (K, V)>,
+    P2: Fn(I) -> ParseResult<I, O>,
     K: Hash + Eq,
 {
-    move |mut input: Input<'a>| {
+    move |mut input: I| {
         let mut map = FxHashMap::with_capacity_and_hasher(capacity_hint, Default::default());
         match p1(input) {
             Ok((rest, (key, value))) => {
@@ -507,15 +646,13 @@ where
 }
 
 /// separated1 is like separated, but requires at least one element
-pub fn separated1<'a, P1, P2, O1, O2>(
-    p1: P1,
-    p2: P2,
-) -> impl Fn(Input<'a>) -> ParseResult<'a, Vec<O1>>
+pub fn separated1<I, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(I) -> ParseResult<I, Vec<O1>>
 where
-    P1: Fn(Input<'a>) -> ParseResult<'a, O1>,
-    P2: Fn(Input<'a>) -> ParseResult<'a, O2>,
+    I: Input,
+    P1: Fn(I) -> ParseResult<I, O1>,
+    P2: Fn(I) -> ParseResult<I, O2>,
 {
-    move |mut input: Input<'a>| {
+    move |mut input: I| {
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
         let (rest, result) = p1(input)?;
         res.push(result);
@@ -545,7 +682,7 @@ where
 #[macro_export]
 macro_rules! alt {
     ($first:expr $(, $rest:expr)* $(,)?) => {
-        |input| {  // No explicit lifetime - let compiler infer
+        |input| {
             match ($first)(input) {
                 Ok(result) => Ok(result),
                 Err(_) => {
@@ -564,17 +701,18 @@ macro_rules! alt {
 
 /// fold_many0 applies a parser zero or more times and folds the results using the provided
 /// function and initial accumulator value
-pub fn fold_many0<'a, P, O, F, Acc>(
+pub fn fold_many0<I, P, O, F, Acc>(
     parser: P,
     init: Acc,
     f: F,
-) -> impl Fn(Input<'a>) -> ParseResult<'a, Acc>
+) -> impl Fn(I) -> ParseResult<I, Acc>
 where
-    P: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P: Fn(I) -> ParseResult<I, O>,
     F: Fn(Acc, O) -> Acc,
     Acc: Clone,
 {
-    move |mut input: Input<'a>| {
+    move |mut input: I| {
         let mut acc = init.clone();
 
         loop {
@@ -592,28 +730,30 @@ where
 }
 
 /// peek applies a parser but does not consume any input
-pub fn peek<'a, P, O>(parser: P) -> impl Fn(Input<'a>) -> ParseResult<'a, O>
+pub fn peek<I, P, O>(parser: P) -> impl Fn(I) -> ParseResult<I, O>
 where
-    P: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P: Fn(I) -> ParseResult<I, O>,
 {
-    move |input: Input<'a>| {
+    move |input: I| {
         let (_, result) = parser(input)?;
         Ok((input, result))
     }
 }
 
 /// fold_many1 is like fold_many0, but requires at least one successful parse
-pub fn fold_many1<'a, P, O, F, Acc>(
+pub fn fold_many1<I, P, O, F, Acc>(
     parser: P,
     init: Acc,
     f: F,
-) -> impl Fn(Input<'a>) -> ParseResult<'a, Acc>
+) -> impl Fn(I) -> ParseResult<I, Acc>
 where
-    P: Fn(Input<'a>) -> ParseResult<'a, O>,
+    I: Input,
+    P: Fn(I) -> ParseResult<I, O>,
     F: Fn(Acc, O) -> Acc,
     Acc: Clone,
 {
-    move |mut input: Input<'a>| {
+    move |mut input: I| {
         let mut acc = init.clone();
 
         match parser(input) {
@@ -638,11 +778,12 @@ where
     }
 }
 
-/// take consumes a specific number of characters from the input
-pub fn take<'a>(count: usize) -> impl Fn(Input<'a>) -> ParseResult<'a, &'a str> {
-    move |input: Input<'a>| {
+/// take consumes a specific number of bytes from the input
+pub fn take<I: Input>(count: usize) -> impl Fn(I) -> ParseResult<I, I> {
+    move |input: I| {
         if input.len() >= count {
-            Ok((&input[count..], &input[..count]))
+            let (matched, rest) = input.split_at(count);
+            Ok((rest, matched))
         } else {
             Err(ParseError::NotEnoughInputToTake)
         }

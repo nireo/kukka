@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let newline_parser = or(char('\n'), char('\r'));
     let csv_parser = separated1(line_parser, newline_parser);
 
-    let (_, rows) = csv_parser.parse(&content)?;
+    let (_, rows) = csv_parser.parse(content.as_str())?;
     for row in rows {
         for field in row {
             print!("{} ", field);
