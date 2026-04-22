@@ -386,9 +386,10 @@ where
         match parser(input) {
             Ok((rest, result)) => {
                 res.push(result);
+                input = rest;
 
                 loop {
-                    match parser(rest) {
+                    match parser(input) {
                         Ok((rest, result)) => {
                             res.push(result);
                             input = rest;

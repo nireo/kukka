@@ -160,6 +160,13 @@ mod tests {
     }
 
     #[test]
+    fn test_many1_single_match_advances_input() {
+        let parser = many1(char('a'));
+        let result = parser.parse("abcd");
+        assert_eq!(result, Ok(("bcd", vec!['a'])));
+    }
+
+    #[test]
     fn test_separated_empty() {
         let digit = char('1');
         let comma = char(',');
