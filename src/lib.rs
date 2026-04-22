@@ -15,6 +15,7 @@ pub trait Input: Copy {
 
     fn len(self) -> usize;
     fn split_at(self, mid: usize) -> (Self, Self);
+    fn split_at_checked(self, mid: usize) -> Option<(Self, Self)>;
     fn first(self) -> Option<Self::Item>;
     fn starts_with(self, prefix: Self::Slice) -> bool;
     fn iter_indices(self) -> Self::Iter;
@@ -34,6 +35,10 @@ impl<'a> Input for &'a str {
 
     fn split_at(self, mid: usize) -> (Self, Self) {
         self.split_at(mid)
+    }
+
+    fn split_at_checked(self, mid: usize) -> Option<(Self, Self)> {
+        self.is_char_boundary(mid).then(|| self.split_at(mid))
     }
 
     fn first(self) -> Option<Self::Item> {
@@ -78,6 +83,10 @@ impl<'a> Input for &'a [u8] {
 
     fn split_at(self, mid: usize) -> (Self, Self) {
         self.split_at(mid)
+    }
+
+    fn split_at_checked(self, mid: usize) -> Option<(Self, Self)> {
+        (mid <= self.len()).then(|| self.split_at(mid))
     }
 
     fn first(self) -> Option<Self::Item> {
@@ -134,7 +143,9 @@ pub enum ParseError {
     ExpectedAtLeastOneDigit,
     ExpectedDigitsAfterSign,
     NoAlternativeMatched,
+    NoProgress,
     NotEnoughInputToTake,
+    InvalidTakeBoundary,
 }
 
 impl fmt::Display for ParseError {
@@ -149,7 +160,9 @@ impl fmt::Display for ParseError {
             ParseError::ExpectedAtLeastOneDigit => "expected at least one digit",
             ParseError::ExpectedDigitsAfterSign => "expected digits after sign",
             ParseError::NoAlternativeMatched => "no alternative matched",
+            ParseError::NoProgress => "parser succeeded without consuming input",
             ParseError::NotEnoughInputToTake => "not enough input to take",
+            ParseError::InvalidTakeBoundary => "take count did not fall on a valid input boundary",
         };
 
         f.write_str(message)
@@ -159,6 +172,11 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 pub type ParseResult<I, T> = Result<(I, T), ParseError>;
+
+#[inline(always)]
+fn parser_made_progress<I: Input>(input: I, rest: I) -> bool {
+    rest.len() < input.len()
+}
 
 /// A Parser is a function that takes an input slice and returns a ParseResult.
 pub trait Parser<I, Out> {
@@ -349,6 +367,10 @@ where
         loop {
             match parser(input) {
                 Ok((rest, result)) => {
+                    if !parser_made_progress(input, rest) {
+                        return Err(ParseError::NoProgress);
+                    }
+
                     res.push(result);
                     input = rest;
                 }
@@ -385,12 +407,20 @@ where
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
         match parser(input) {
             Ok((rest, result)) => {
+                if !parser_made_progress(input, rest) {
+                    return Err(ParseError::NoProgress);
+                }
+
                 res.push(result);
                 input = rest;
 
                 loop {
                     match parser(input) {
                         Ok((rest, result)) => {
+                            if !parser_made_progress(input, rest) {
+                                return Err(ParseError::NoProgress);
+                            }
+
                             res.push(result);
                             input = rest;
                         }
@@ -431,6 +461,10 @@ where
         loop {
             match p2(input) {
                 Ok((rest, _)) => {
+                    if !parser_made_progress(input, rest) {
+                        break;
+                    }
+
                     input = rest;
                     match p1(input) {
                         Ok((rest, result)) => {
@@ -630,6 +664,10 @@ where
         loop {
             match p2(input) {
                 Ok((rest, _)) => {
+                    if !parser_made_progress(input, rest) {
+                        break;
+                    }
+
                     input = rest;
                     match p1(input) {
                         Ok((rest, (key, value))) => {
@@ -662,6 +700,10 @@ where
         loop {
             match p2(input) {
                 Ok((rest, _)) => {
+                    if !parser_made_progress(input, rest) {
+                        break;
+                    }
+
                     input = rest;
                     match p1(input) {
                         Ok((rest, result)) => {
@@ -719,6 +761,10 @@ where
         loop {
             match parser(input) {
                 Ok((rest, result)) => {
+                    if !parser_made_progress(input, rest) {
+                        return Err(ParseError::NoProgress);
+                    }
+
                     acc = f(acc, result);
                     input = rest;
                 }
@@ -759,6 +805,10 @@ where
 
         match parser(input) {
             Ok((rest, result)) => {
+                if !parser_made_progress(input, rest) {
+                    return Err(ParseError::NoProgress);
+                }
+
                 acc = f(acc, result);
                 input = rest;
             }
@@ -768,6 +818,10 @@ where
         loop {
             match parser(input) {
                 Ok((rest, result)) => {
+                    if !parser_made_progress(input, rest) {
+                        return Err(ParseError::NoProgress);
+                    }
+
                     acc = f(acc, result);
                     input = rest;
                 }
@@ -779,14 +833,17 @@ where
     }
 }
 
-/// take consumes a specific number of bytes from the input
+/// take consumes a specific number of bytes from the input.
+///
+/// For `&str`, `count` must fall on a valid UTF-8 character boundary.
 pub fn take<I: Input>(count: usize) -> impl Fn(I) -> ParseResult<I, I> {
     move |input: I| {
-        if input.len() >= count {
-            let (matched, rest) = input.split_at(count);
+        if input.len() < count {
+            Err(ParseError::NotEnoughInputToTake)
+        } else if let Some((matched, rest)) = input.split_at_checked(count) {
             Ok((rest, matched))
         } else {
-            Err(ParseError::NotEnoughInputToTake)
+            Err(ParseError::InvalidTakeBoundary)
         }
     }
 }

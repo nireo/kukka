@@ -136,6 +136,13 @@ mod tests {
     }
 
     #[test]
+    fn test_many_rejects_zero_progress_parser() {
+        let parser = many(multispace0());
+        let result = parser.parse("abc");
+        assert_eq!(result, Err(ParseError::NoProgress));
+    }
+
+    #[test]
     fn test_many_multiple_matches() {
         let char_a = char('a');
         let parser = many(char_a);
@@ -167,6 +174,13 @@ mod tests {
     }
 
     #[test]
+    fn test_many1_rejects_zero_progress_parser() {
+        let parser = many1(multispace0());
+        let result = parser.parse("abc");
+        assert_eq!(result, Err(ParseError::NoProgress));
+    }
+
+    #[test]
     fn test_separated_empty() {
         let digit = char('1');
         let comma = char(',');
@@ -194,6 +208,13 @@ mod tests {
 
         let result = parser.parse("1,1,1abc");
         assert_eq!(result, Ok(("abc", vec!['1', '1', '1'])));
+    }
+
+    #[test]
+    fn test_separated_stops_on_zero_progress_separator() {
+        let parser = separated(char('a'), multispace0());
+        let result = parser.parse("ab");
+        assert_eq!(result, Ok(("b", vec!['a'])));
     }
 
     #[test]
@@ -357,6 +378,13 @@ mod tests {
     }
 
     #[test]
+    fn test_fold_many_rejects_zero_progress_parser() {
+        let parser = fold_many0(multispace0(), 0usize, |acc, _| acc + 1);
+        let result = parser.parse("abc");
+        assert_eq!(result, Err(ParseError::NoProgress));
+    }
+
+    #[test]
     fn test_fold_many_sums_integers() {
         let parser = fold_many0(and(integer(), multispace1()), 0, |acc, num| acc + num.0);
         let res = parser.parse("1 2 3 abc");
@@ -386,5 +414,27 @@ mod tests {
 
         let result = parser.parse("aaabbb");
         assert_eq!(result, Ok(("bbb", 3)));
+    }
+
+    #[test]
+    fn test_fold_many1_rejects_zero_progress_parser() {
+        let parser = fold_many1(multispace0(), 0usize, |acc, _| acc + 1);
+        let result = parser.parse("abc");
+        assert_eq!(result, Err(ParseError::NoProgress));
+    }
+
+    #[test]
+    fn test_take_rejects_invalid_utf8_boundary() {
+        let parser = take(1);
+        let result = parser.parse("éa");
+        assert_eq!(result, Err(ParseError::InvalidTakeBoundary));
+    }
+
+    #[test]
+    fn test_take_bytes_success() {
+        let parser = take(2);
+        let input: &[u8] = b"abcd";
+        let result = parser.parse(input);
+        assert_eq!(result, Ok((&b"cd"[..], &b"ab"[..])));
     }
 }
