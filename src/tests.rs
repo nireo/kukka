@@ -311,6 +311,20 @@ mod tests {
     }
 
     #[test]
+    fn test_double_requires_at_least_one_digit() {
+        let parser = double();
+        let result = parser.parse(".xyz");
+        assert_eq!(result, Err(ParseError::ExpectedAtLeastOneDigit));
+    }
+
+    #[test]
+    fn test_double_requires_digits_after_sign() {
+        let parser = double();
+        let result = parser.parse("-.xyz");
+        assert_eq!(result, Err(ParseError::ExpectedDigitsAfterSign));
+    }
+
+    #[test]
     fn test_integer() {
         let parser = integer();
         let result = parser.parse("456def");
@@ -356,7 +370,7 @@ mod tests {
     fn test_value_no_match() {
         let parser = value(string("true"), || true);
         let result = parser.parse("falseabc");
-        assert!(result.is_err());
+        assert_eq!(result, Err(ParseError::StringMismatch));
     }
 
     #[test]

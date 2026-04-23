@@ -234,9 +234,9 @@ where
     P: Fn(I) -> ParseResult<I, O>,
     F: Fn() -> V,
 {
-    move |input: I| match p(input) {
-        Ok((rest, _)) => Ok((rest, val_fn())),
-        Err(_) => Err(ParseError::ValueParserMismatch),
+    move |input: I| {
+        let (rest, _) = p(input)?;
+        Ok((rest, val_fn()))
     }
 }
 
@@ -497,6 +497,7 @@ pub fn double<I: Input>() -> impl Fn(I) -> ParseResult<I, f64> {
         let mut result = 0f64;
         let mut pos = 0;
         let mut negative = false;
+        let mut saw_digit = false;
 
         if bytes[0] == b'-' {
             negative = true;
@@ -510,6 +511,7 @@ pub fn double<I: Input>() -> impl Fn(I) -> ParseResult<I, f64> {
         while pos < bytes.len() {
             match bytes[pos] {
                 b'0'..=b'9' => {
+                    saw_digit = true;
                     result = result * 10.0 + (bytes[pos] - b'0') as f64;
                     pos += 1;
                 }
@@ -519,6 +521,7 @@ pub fn double<I: Input>() -> impl Fn(I) -> ParseResult<I, f64> {
                     while pos < bytes.len() {
                         match bytes[pos] {
                             b'0'..=b'9' => {
+                                saw_digit = true;
                                 result += (bytes[pos] - b'0') as f64 * frac;
                                 frac *= 0.1;
                                 pos += 1;
@@ -532,8 +535,12 @@ pub fn double<I: Input>() -> impl Fn(I) -> ParseResult<I, f64> {
             }
         }
 
-        if pos == if negative { 1 } else { 0 } {
-            return Err(ParseError::ExpectedAtLeastOneDigit);
+        if !saw_digit {
+            return Err(if negative {
+                ParseError::ExpectedDigitsAfterSign
+            } else {
+                ParseError::ExpectedAtLeastOneDigit
+            });
         }
 
         let final_result = if negative { -result } else { result };
