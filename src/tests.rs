@@ -4,6 +4,35 @@ use crate::*;
 mod tests {
     use super::*;
 
+    struct MatchA;
+    struct MatchB;
+
+    impl<'a> Parser<&'a str, char> for MatchA {
+        fn parse(&self, input: &'a str) -> ParseResult<&'a str, char> {
+            char('a').parse(input)
+        }
+    }
+
+    impl<'a> Parser<&'a str, char> for MatchB {
+        fn parse(&self, input: &'a str) -> ParseResult<&'a str, char> {
+            char('b').parse(input)
+        }
+    }
+
+    #[test]
+    fn test_combinators_accept_parser_trait_implementors() {
+        let parser = many1(MatchA);
+        let result = parser.parse("aaab");
+        assert_eq!(result, Ok(("b", vec!['a', 'a', 'a'])));
+    }
+
+    #[test]
+    fn test_alt_macro_accepts_parser_trait_implementors() {
+        let parser = alt!(MatchB, MatchA);
+        let result = parser.parse("abc");
+        assert_eq!(result, Ok(("bc", 'a')));
+    }
+
     #[test]
     fn test_char_success() {
         let parser = char('a');

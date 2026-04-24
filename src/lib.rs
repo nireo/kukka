@@ -231,11 +231,11 @@ pub fn multispace1<I: Input>() -> impl Fn(I) -> ParseResult<I, I> {
 pub fn value<I, P, F, O, V>(p: P, val_fn: F) -> impl Fn(I) -> ParseResult<I, V>
 where
     I: Input,
-    P: Fn(I) -> ParseResult<I, O>,
+    P: Parser<I, O>,
     F: Fn() -> V,
 {
     move |input: I| {
-        let (rest, _) = p(input)?;
+        let (rest, _) = p.parse(input)?;
         Ok((rest, val_fn()))
     }
 }
@@ -245,10 +245,10 @@ where
 pub fn or_default<I, P, O, D>(p: P, default: D) -> impl Fn(I) -> ParseResult<I, O>
 where
     I: Input,
-    P: Fn(I) -> ParseResult<I, O>,
+    P: Parser<I, O>,
     D: Fn() -> O,
 {
-    move |input: I| match p(input) {
+    move |input: I| match p.parse(input) {
         Ok((rest, res)) => Ok((rest, res)),
         Err(_) => Ok((input, default())),
     }
@@ -259,12 +259,12 @@ where
 pub fn or<I, P1, P2, O>(p1: P1, p2: P2) -> impl Fn(I) -> ParseResult<I, O>
 where
     I: Input,
-    P1: Fn(I) -> ParseResult<I, O>,
-    P2: Fn(I) -> ParseResult<I, O>,
+    P1: Parser<I, O>,
+    P2: Parser<I, O>,
 {
-    move |input: I| match p1(input) {
+    move |input: I| match p1.parse(input) {
         Ok((rest, res)) => Ok((rest, res)),
-        Err(_) => p2(input),
+        Err(_) => p2.parse(input),
     }
 }
 
@@ -272,12 +272,12 @@ where
 pub fn and<I, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(I) -> ParseResult<I, (O1, O2)>
 where
     I: Input,
-    P1: Fn(I) -> ParseResult<I, O1>,
-    P2: Fn(I) -> ParseResult<I, O2>,
+    P1: Parser<I, O1>,
+    P2: Parser<I, O2>,
 {
     move |input: I| {
-        let (rest, r1) = p1(input)?;
-        let (rest, r2) = p2(rest)?;
+        let (rest, r1) = p1.parse(input)?;
+        let (rest, r2) = p2.parse(rest)?;
         Ok((rest, (r1, r2)))
     }
 }
@@ -359,13 +359,13 @@ where
 pub fn many<I, P, O>(parser: P) -> impl Fn(I) -> ParseResult<I, Vec<O>>
 where
     I: Input,
-    P: Fn(I) -> ParseResult<I, O>,
+    P: Parser<I, O>,
 {
     move |mut input: I| {
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
 
         loop {
-            match parser(input) {
+            match parser.parse(input) {
                 Ok((rest, result)) => {
                     if !parser_made_progress(input, rest) {
                         return Err(ParseError::NoProgress);
@@ -387,11 +387,11 @@ where
 pub fn map<I, P, O1, O2, F>(parser: P, f: F) -> impl Fn(I) -> ParseResult<I, O2>
 where
     I: Input,
-    P: Fn(I) -> ParseResult<I, O1>,
+    P: Parser<I, O1>,
     F: Fn(O1) -> O2,
 {
     move |input: I| {
-        let (rest, result) = parser(input)?;
+        let (rest, result) = parser.parse(input)?;
         Ok((rest, f(result)))
     }
 }
@@ -401,11 +401,11 @@ where
 pub fn many1<I, P, O>(parser: P) -> impl Fn(I) -> ParseResult<I, Vec<O>>
 where
     I: Input,
-    P: Fn(I) -> ParseResult<I, O>,
+    P: Parser<I, O>,
 {
     move |mut input: I| {
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
-        match parser(input) {
+        match parser.parse(input) {
             Ok((rest, result)) => {
                 if !parser_made_progress(input, rest) {
                     return Err(ParseError::NoProgress);
@@ -415,7 +415,7 @@ where
                 input = rest;
 
                 loop {
-                    match parser(input) {
+                    match parser.parse(input) {
                         Ok((rest, result)) => {
                             if !parser_made_progress(input, rest) {
                                 return Err(ParseError::NoProgress);
@@ -442,13 +442,13 @@ where
 pub fn separated<I, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(I) -> ParseResult<I, Vec<O1>>
 where
     I: Input,
-    P1: Fn(I) -> ParseResult<I, O1>,
-    P2: Fn(I) -> ParseResult<I, O2>,
+    P1: Parser<I, O1>,
+    P2: Parser<I, O2>,
 {
     move |mut input: I| {
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
 
-        match p1(input) {
+        match p1.parse(input) {
             Ok((rest, result)) => {
                 res.push(result);
                 input = rest;
@@ -459,14 +459,14 @@ where
         }
 
         loop {
-            match p2(input) {
+            match p2.parse(input) {
                 Ok((rest, _)) => {
                     if !parser_made_progress(input, rest) {
                         break;
                     }
 
                     input = rest;
-                    match p1(input) {
+                    match p1.parse(input) {
                         Ok((rest, result)) => {
                             res.push(result);
                             input = rest;
@@ -609,14 +609,14 @@ pub fn delimited<I, P1, P2, P3, O1, O2, O3>(
 ) -> impl Fn(I) -> ParseResult<I, O2>
 where
     I: Input,
-    P1: Fn(I) -> ParseResult<I, O1>,
-    P2: Fn(I) -> ParseResult<I, O2>,
-    P3: Fn(I) -> ParseResult<I, O3>,
+    P1: Parser<I, O1>,
+    P2: Parser<I, O2>,
+    P3: Parser<I, O3>,
 {
     move |input: I| {
-        let (rest, _) = first_delim(input)?;
-        let (rest, out) = inner(rest)?;
-        let (rest, _) = second_delim(rest)?;
+        let (rest, _) = first_delim.parse(input)?;
+        let (rest, out) = inner.parse(rest)?;
+        let (rest, _) = second_delim.parse(rest)?;
         Ok((rest, out))
     }
 }
@@ -631,14 +631,14 @@ pub fn separated_pair<I, P1, P2, P3, O1, O2, O3>(
 ) -> impl Fn(I) -> ParseResult<I, (O1, O3)>
 where
     I: Input,
-    P1: Fn(I) -> ParseResult<I, O1>,
-    P2: Fn(I) -> ParseResult<I, O2>,
-    P3: Fn(I) -> ParseResult<I, O3>,
+    P1: Parser<I, O1>,
+    P2: Parser<I, O2>,
+    P3: Parser<I, O3>,
 {
     move |input: I| {
-        let (rest, out1) = p1(input)?;
-        let (rest, _) = p2(rest)?;
-        let (rest, out3) = p3(rest)?;
+        let (rest, out1) = p1.parse(input)?;
+        let (rest, _) = p2.parse(rest)?;
+        let (rest, out3) = p3.parse(rest)?;
         Ok((rest, (out1, out3)))
     }
 }
@@ -654,13 +654,13 @@ pub fn separated_into_map<I, P1, P2, O, K, V>(
 ) -> impl Fn(I) -> ParseResult<I, FxHashMap<K, V>>
 where
     I: Input,
-    P1: Fn(I) -> ParseResult<I, (K, V)>,
-    P2: Fn(I) -> ParseResult<I, O>,
+    P1: Parser<I, (K, V)>,
+    P2: Parser<I, O>,
     K: Hash + Eq,
 {
     move |mut input: I| {
         let mut map = FxHashMap::with_capacity_and_hasher(capacity_hint, Default::default());
-        match p1(input) {
+        match p1.parse(input) {
             Ok((rest, (key, value))) => {
                 map.insert(key, value);
                 input = rest;
@@ -669,14 +669,14 @@ where
         }
 
         loop {
-            match p2(input) {
+            match p2.parse(input) {
                 Ok((rest, _)) => {
                     if !parser_made_progress(input, rest) {
                         break;
                     }
 
                     input = rest;
-                    match p1(input) {
+                    match p1.parse(input) {
                         Ok((rest, (key, value))) => {
                             map.insert(key, value);
                             input = rest;
@@ -695,24 +695,24 @@ where
 pub fn separated1<I, P1, P2, O1, O2>(p1: P1, p2: P2) -> impl Fn(I) -> ParseResult<I, Vec<O1>>
 where
     I: Input,
-    P1: Fn(I) -> ParseResult<I, O1>,
-    P2: Fn(I) -> ParseResult<I, O2>,
+    P1: Parser<I, O1>,
+    P2: Parser<I, O2>,
 {
     move |mut input: I| {
         let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
-        let (rest, result) = p1(input)?;
+        let (rest, result) = p1.parse(input)?;
         res.push(result);
         input = rest;
 
         loop {
-            match p2(input) {
+            match p2.parse(input) {
                 Ok((rest, _)) => {
                     if !parser_made_progress(input, rest) {
                         break;
                     }
 
                     input = rest;
-                    match p1(input) {
+                    match p1.parse(input) {
                         Ok((rest, result)) => {
                             res.push(result);
                             input = rest;
@@ -733,16 +733,16 @@ where
 macro_rules! alt {
     ($first:expr $(, $rest:expr)* $(,)?) => {
         |input| {
-            match ($first)(input) {
+            match $crate::Parser::parse(&$first, input) {
                 Ok(result) => Ok(result),
                 Err(_) => {
                     $(
-                        match ($rest)(input) {
+                        match $crate::Parser::parse(&$rest, input) {
                             Ok(result) => return Ok(result),
                             Err(_) => {}
                         }
                     )*
-                    Err(ParseError::NoAlternativeMatched)
+                    Err($crate::ParseError::NoAlternativeMatched)
                 }
             }
         }
@@ -751,14 +751,10 @@ macro_rules! alt {
 
 /// fold_many0 applies a parser zero or more times and folds the results using the provided
 /// function and initial accumulator value
-pub fn fold_many0<I, P, O, F, Acc>(
-    parser: P,
-    init: Acc,
-    f: F,
-) -> impl Fn(I) -> ParseResult<I, Acc>
+pub fn fold_many0<I, P, O, F, Acc>(parser: P, init: Acc, f: F) -> impl Fn(I) -> ParseResult<I, Acc>
 where
     I: Input,
-    P: Fn(I) -> ParseResult<I, O>,
+    P: Parser<I, O>,
     F: Fn(Acc, O) -> Acc,
     Acc: Clone,
 {
@@ -766,7 +762,7 @@ where
         let mut acc = init.clone();
 
         loop {
-            match parser(input) {
+            match parser.parse(input) {
                 Ok((rest, result)) => {
                     if !parser_made_progress(input, rest) {
                         return Err(ParseError::NoProgress);
@@ -787,30 +783,26 @@ where
 pub fn peek<I, P, O>(parser: P) -> impl Fn(I) -> ParseResult<I, O>
 where
     I: Input,
-    P: Fn(I) -> ParseResult<I, O>,
+    P: Parser<I, O>,
 {
     move |input: I| {
-        let (_, result) = parser(input)?;
+        let (_, result) = parser.parse(input)?;
         Ok((input, result))
     }
 }
 
 /// fold_many1 is like fold_many0, but requires at least one successful parse
-pub fn fold_many1<I, P, O, F, Acc>(
-    parser: P,
-    init: Acc,
-    f: F,
-) -> impl Fn(I) -> ParseResult<I, Acc>
+pub fn fold_many1<I, P, O, F, Acc>(parser: P, init: Acc, f: F) -> impl Fn(I) -> ParseResult<I, Acc>
 where
     I: Input,
-    P: Fn(I) -> ParseResult<I, O>,
+    P: Parser<I, O>,
     F: Fn(Acc, O) -> Acc,
     Acc: Clone,
 {
     move |mut input: I| {
         let mut acc = init.clone();
 
-        match parser(input) {
+        match parser.parse(input) {
             Ok((rest, result)) => {
                 if !parser_made_progress(input, rest) {
                     return Err(ParseError::NoProgress);
@@ -823,7 +815,7 @@ where
         }
 
         loop {
-            match parser(input) {
+            match parser.parse(input) {
                 Ok((rest, result)) => {
                     if !parser_made_progress(input, rest) {
                         return Err(ParseError::NoProgress);
