@@ -277,6 +277,39 @@ mod tests {
     }
 
     #[test]
+    fn test_separated1_fold_requires_one_element() {
+        let parser = separated1_fold(integer, char(','), Vec::new, |mut values, value| {
+            values.push(value);
+            values
+        });
+
+        let result = parser.parse("abc");
+        assert_eq!(result, Err(ParseError::ExpectedAtLeastOneDigit));
+    }
+
+    #[test]
+    fn test_separated1_fold_success() {
+        let parser = separated1_fold(integer, char(','), Vec::new, |mut values, value| {
+            values.push(value);
+            values
+        });
+
+        let result = parser.parse("1,2,3abc");
+        assert_eq!(result, Ok(("abc", vec![1, 2, 3])));
+    }
+
+    #[test]
+    fn test_separated1_fold_trailing_separator_error() {
+        let parser = separated1_fold(integer, char(','), Vec::new, |mut values, value| {
+            values.push(value);
+            values
+        });
+
+        let result = parser.parse("1,2,");
+        assert_eq!(result, Err(ParseError::ExpectedElementAfterSeparator));
+    }
+
+    #[test]
     fn test_delimited_success() {
         let parser = delimited(char('('), char('a'), char(')'));
         let result = parser.parse("(a)");
@@ -336,6 +369,20 @@ mod tests {
         let parser = multispace1;
         let result = parser.parse("abc");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_take_while1_success() {
+        let parser = take_while1(|c: char| c.is_ascii_alphabetic());
+        let result = parser.parse("abc123");
+        assert_eq!(result, Ok(("123", "abc")));
+    }
+
+    #[test]
+    fn test_take_while1_requires_one_match() {
+        let parser = take_while1(|c: char| c.is_ascii_alphabetic());
+        let result = parser.parse("123abc");
+        assert_eq!(result, Err(ParseError::ExpectedAtLeastOne));
     }
 
     #[test]

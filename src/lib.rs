@@ -410,6 +410,22 @@ where
     }
 }
 
+/// take_while1 is like take_while, but requires at least one matching item.
+pub fn take_while1<I, F>(p: F) -> impl Fn(I) -> ParseResult<I, I>
+where
+    I: Input,
+    F: Fn(I::Item) -> bool,
+{
+    move |input: I| {
+        let (rest, matched) = take_while(&p).parse(input)?;
+        if matched.len() == 0 {
+            Err(ParseError::ExpectedAtLeastOne)
+        } else {
+            Ok((rest, matched))
+        }
+    }
+}
+
 /// take_until consumes input until the target item is found. The target item is not consumed. If
 /// the target item is not found, the entire input is consumed.
 pub fn take_until<I>(target: I::Item) -> impl Fn(I) -> ParseResult<I, I>
@@ -769,6 +785,49 @@ where
             }
             Err(_) => return Ok((input, acc)),
         }
+
+        loop {
+            match p2.parse(input) {
+                Ok((rest, _)) => {
+                    if !parser_made_progress(input, rest) {
+                        break;
+                    }
+
+                    input = rest;
+                    match p1.parse(input) {
+                        Ok((rest, result)) => {
+                            acc = fold(acc, result);
+                            input = rest;
+                        }
+                        Err(_) => return Err(ParseError::ExpectedElementAfterSeparator),
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        Ok((input, acc))
+    }
+}
+
+/// separated1_fold is like separated_fold, but requires at least one element.
+pub fn separated1_fold<I, P1, P2, O1, O2, Init, Fold, Acc>(
+    p1: P1,
+    p2: P2,
+    init: Init,
+    fold: Fold,
+) -> impl Fn(I) -> ParseResult<I, Acc>
+where
+    I: Input,
+    P1: Parser<I, O1>,
+    P2: Parser<I, O2>,
+    Init: Fn() -> Acc,
+    Fold: Fn(Acc, O1) -> Acc,
+{
+    move |mut input: I| {
+        let mut acc = init();
+        let (rest, result) = p1.parse(input)?;
+        acc = fold(acc, result);
+        input = rest;
 
         loop {
             match p2.parse(input) {
