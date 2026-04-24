@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_many_rejects_zero_progress_parser() {
-        let parser = many(multispace0());
+        let parser = many(multispace0);
         let result = parser.parse("abc");
         assert_eq!(result, Err(ParseError::NoProgress));
     }
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_many1_rejects_zero_progress_parser() {
-        let parser = many1(multispace0());
+        let parser = many1(multispace0);
         let result = parser.parse("abc");
         assert_eq!(result, Err(ParseError::NoProgress));
     }
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_separated_stops_on_zero_progress_separator() {
-        let parser = separated(char('a'), multispace0());
+        let parser = separated(char('a'), multispace0);
         let result = parser.parse("ab");
         assert_eq!(result, Ok(("b", vec!['a'])));
     }
@@ -292,86 +292,93 @@ mod tests {
 
     #[test]
     fn test_multispace0() {
-        let parser = multispace0();
+        let parser = multispace0;
         let result = parser.parse("   abc");
         assert_eq!(result, Ok(("abc", "   ")));
     }
 
     #[test]
     fn test_multispace0_succeeds_without_space() {
-        let parser = multispace0();
+        let parser = multispace0;
         let result = parser.parse("abc");
         assert_eq!(result, Ok(("abc", "")));
     }
 
     #[test]
     fn test_multispace1() {
-        let parser = multispace1();
+        let parser = multispace1;
         let result = parser.parse("   abc");
         assert_eq!(result, Ok(("abc", "   ")));
     }
 
     #[test]
     fn test_multispace1_fails_without_space() {
-        let parser = multispace1();
+        let parser = multispace1;
         let result = parser.parse("abc");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_map() {
-        let parser = map(integer(), |num| num * 2);
+        let parser = map(integer, |num| num * 2);
         let result = parser.parse("21abc");
         assert_eq!(result, Ok(("abc", 42)));
     }
 
     #[test]
     fn test_double() {
-        let parser = double();
+        let parser = double;
         let result = parser.parse("3.14xyz");
         assert_eq!(result, Ok(("xyz", 3.14)));
     }
 
     #[test]
     fn test_double_no_decimal() {
-        let parser = double();
+        let parser = double;
         let result = parser.parse("42xyz");
         assert_eq!(result, Ok(("xyz", 42.0)));
     }
 
     #[test]
     fn test_double_requires_at_least_one_digit() {
-        let parser = double();
+        let parser = double;
         let result = parser.parse(".xyz");
         assert_eq!(result, Err(ParseError::ExpectedAtLeastOneDigit));
     }
 
     #[test]
     fn test_double_requires_digits_after_sign() {
-        let parser = double();
+        let parser = double;
         let result = parser.parse("-.xyz");
         assert_eq!(result, Err(ParseError::ExpectedDigitsAfterSign));
     }
 
     #[test]
     fn test_integer() {
-        let parser = integer();
+        let parser = integer;
         let result = parser.parse("456def");
         assert_eq!(result, Ok(("def", 456)));
     }
 
     #[test]
     fn test_integer_negative() {
-        let parser = integer();
+        let parser = integer;
         let result = parser.parse("-789ghi");
         assert_eq!(result, Ok(("ghi", -789)));
     }
 
     #[test]
     fn test_integer_no_digits() {
-        let parser = integer();
+        let parser = integer;
         let result = parser.parse("abc");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_digit01() {
+        let parser = digit01;
+        let result = parser.parse("123abc");
+        assert_eq!(result, Ok(("abc", "123")));
     }
 
     #[test]
@@ -415,21 +422,21 @@ mod tests {
 
     #[test]
     fn test_fold_many_returns_init_with_empty() {
-        let parser = fold_many0(integer(), 0, |acc, num| acc + num);
+        let parser = fold_many0(integer, 0, |acc, num| acc + num);
         let res = parser.parse("");
         assert_eq!(res, Ok(("", 0)));
     }
 
     #[test]
     fn test_fold_many_rejects_zero_progress_parser() {
-        let parser = fold_many0(multispace0(), 0usize, |acc, _| acc + 1);
+        let parser = fold_many0(multispace0, 0usize, |acc, _| acc + 1);
         let result = parser.parse("abc");
         assert_eq!(result, Err(ParseError::NoProgress));
     }
 
     #[test]
     fn test_fold_many_sums_integers() {
-        let parser = fold_many0(and(integer(), multispace1()), 0, |acc, num| acc + num.0);
+        let parser = fold_many0(and(integer, multispace1), 0, |acc, num| acc + num.0);
         let res = parser.parse("1 2 3 abc");
         assert_eq!(res, Ok(("abc", 6)));
     }
@@ -461,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_fold_many1_rejects_zero_progress_parser() {
-        let parser = fold_many1(multispace0(), 0usize, |acc, _| acc + 1);
+        let parser = fold_many1(multispace0, 0usize, |acc, _| acc + 1);
         let result = parser.parse("abc");
         assert_eq!(result, Err(ParseError::NoProgress));
     }

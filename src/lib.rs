@@ -194,34 +194,30 @@ where
 
 /// multispace0 matches zero or more whitespace characters (space, tab, newline, carriage return)
 #[inline(always)]
-pub fn multispace0<I: Input>() -> impl Fn(I) -> ParseResult<I, I> {
-    |input: I| {
-        let slice = input.as_slice();
-        let bytes = slice.as_ref();
-        let mut end_pos = 0;
+pub fn multispace0<I: Input>(input: I) -> ParseResult<I, I> {
+    let slice = input.as_slice();
+    let bytes = slice.as_ref();
+    let mut end_pos = 0;
 
-        while end_pos < bytes.len() {
-            match bytes[end_pos] {
-                b' ' | b'\t' | b'\n' | b'\r' => end_pos += 1,
-                _ => break,
-            }
+    while end_pos < bytes.len() {
+        match bytes[end_pos] {
+            b' ' | b'\t' | b'\n' | b'\r' => end_pos += 1,
+            _ => break,
         }
-
-        let (matched, rest) = input.split_at(end_pos);
-        Ok((rest, matched))
     }
+
+    let (matched, rest) = input.split_at(end_pos);
+    Ok((rest, matched))
 }
 
 /// multispace1 is like multispace0, but requires at least one whitespace character
 #[inline(always)]
-pub fn multispace1<I: Input>() -> impl Fn(I) -> ParseResult<I, I> {
-    |input: I| {
-        let (rest, matched) = multispace0()(input)?;
-        if matched.len() == 0 {
-            Err(ParseError::ExpectedWhitespace)
-        } else {
-            Ok((rest, matched))
-        }
+pub fn multispace1<I: Input>(input: I) -> ParseResult<I, I> {
+    let (rest, matched) = multispace0(input)?;
+    if matched.len() == 0 {
+        Err(ParseError::ExpectedWhitespace)
+    } else {
+        Ok((rest, matched))
     }
 }
 
@@ -486,117 +482,113 @@ where
 }
 
 /// double parses a signed floating point number from the input
-pub fn double<I: Input>() -> impl Fn(I) -> ParseResult<I, f64> {
-    |input: I| {
-        let slice = input.as_slice();
-        let bytes = slice.as_ref();
-        if bytes.is_empty() {
-            return Err(ParseError::ExpectedAtLeastOneDigit);
-        }
-
-        let mut result = 0f64;
-        let mut pos = 0;
-        let mut negative = false;
-        let mut saw_digit = false;
-
-        if bytes[0] == b'-' {
-            negative = true;
-            pos = 1;
-        }
-
-        if pos >= bytes.len() {
-            return Err(ParseError::ExpectedDigitsAfterSign);
-        }
-
-        while pos < bytes.len() {
-            match bytes[pos] {
-                b'0'..=b'9' => {
-                    saw_digit = true;
-                    result = result * 10.0 + (bytes[pos] - b'0') as f64;
-                    pos += 1;
-                }
-                b'.' => {
-                    pos += 1;
-                    let mut frac = 0.1;
-                    while pos < bytes.len() {
-                        match bytes[pos] {
-                            b'0'..=b'9' => {
-                                saw_digit = true;
-                                result += (bytes[pos] - b'0') as f64 * frac;
-                                frac *= 0.1;
-                                pos += 1;
-                            }
-                            _ => break,
-                        }
-                    }
-                    break;
-                }
-                _ => break,
-            }
-        }
-
-        if !saw_digit {
-            return Err(if negative {
-                ParseError::ExpectedDigitsAfterSign
-            } else {
-                ParseError::ExpectedAtLeastOneDigit
-            });
-        }
-
-        let final_result = if negative { -result } else { result };
-        let (_, rest) = input.split_at(pos);
-        Ok((rest, final_result))
+pub fn double<I: Input>(input: I) -> ParseResult<I, f64> {
+    let slice = input.as_slice();
+    let bytes = slice.as_ref();
+    if bytes.is_empty() {
+        return Err(ParseError::ExpectedAtLeastOneDigit);
     }
+
+    let mut result = 0f64;
+    let mut pos = 0;
+    let mut negative = false;
+    let mut saw_digit = false;
+
+    if bytes[0] == b'-' {
+        negative = true;
+        pos = 1;
+    }
+
+    if pos >= bytes.len() {
+        return Err(ParseError::ExpectedDigitsAfterSign);
+    }
+
+    while pos < bytes.len() {
+        match bytes[pos] {
+            b'0'..=b'9' => {
+                saw_digit = true;
+                result = result * 10.0 + (bytes[pos] - b'0') as f64;
+                pos += 1;
+            }
+            b'.' => {
+                pos += 1;
+                let mut frac = 0.1;
+                while pos < bytes.len() {
+                    match bytes[pos] {
+                        b'0'..=b'9' => {
+                            saw_digit = true;
+                            result += (bytes[pos] - b'0') as f64 * frac;
+                            frac *= 0.1;
+                            pos += 1;
+                        }
+                        _ => break,
+                    }
+                }
+                break;
+            }
+            _ => break,
+        }
+    }
+
+    if !saw_digit {
+        return Err(if negative {
+            ParseError::ExpectedDigitsAfterSign
+        } else {
+            ParseError::ExpectedAtLeastOneDigit
+        });
+    }
+
+    let final_result = if negative { -result } else { result };
+    let (_, rest) = input.split_at(pos);
+    Ok((rest, final_result))
 }
 
 /// integer parses a signed integer from the input
-pub fn integer<I: Input>() -> impl Fn(I) -> ParseResult<I, i64> {
-    |input: I| {
-        let slice = input.as_slice();
-        let bytes = slice.as_ref();
-        if bytes.is_empty() {
-            return Err(ParseError::ExpectedAtLeastOneDigit);
-        }
-
-        let mut result = 0i64;
-        let mut pos = 0;
-        let mut negative = false;
-
-        if bytes[0] == b'-' {
-            negative = true;
-            pos = 1;
-        }
-
-        if pos >= bytes.len() {
-            return Err(ParseError::ExpectedDigitsAfterSign);
-        }
-
-        while pos < bytes.len() {
-            match bytes[pos] {
-                b'0'..=b'9' => {
-                    result = result * 10 + (bytes[pos] - b'0') as i64;
-                    pos += 1;
-                }
-                _ => break,
-            }
-        }
-
-        if pos == if negative { 1 } else { 0 } {
-            return Err(ParseError::ExpectedAtLeastOneDigit);
-        }
-
-        let final_result = if negative { -result } else { result };
-        let (_, rest) = input.split_at(pos);
-        Ok((rest, final_result))
+pub fn integer<I: Input>(input: I) -> ParseResult<I, i64> {
+    let slice = input.as_slice();
+    let bytes = slice.as_ref();
+    if bytes.is_empty() {
+        return Err(ParseError::ExpectedAtLeastOneDigit);
     }
+
+    let mut result = 0i64;
+    let mut pos = 0;
+    let mut negative = false;
+
+    if bytes[0] == b'-' {
+        negative = true;
+        pos = 1;
+    }
+
+    if pos >= bytes.len() {
+        return Err(ParseError::ExpectedDigitsAfterSign);
+    }
+
+    while pos < bytes.len() {
+        match bytes[pos] {
+            b'0'..=b'9' => {
+                result = result * 10 + (bytes[pos] - b'0') as i64;
+                pos += 1;
+            }
+            _ => break,
+        }
+    }
+
+    if pos == if negative { 1 } else { 0 } {
+        return Err(ParseError::ExpectedAtLeastOneDigit);
+    }
+
+    let final_result = if negative { -result } else { result };
+    let (_, rest) = input.split_at(pos);
+    Ok((rest, final_result))
 }
 
-pub fn digit01<I>() -> impl Fn(I) -> ParseResult<I, I>
+pub fn digit01<I>(input: I) -> ParseResult<I, I>
 where
     I: Input,
     I::Item: AsciiDigit,
 {
-    take_while(|c: I::Item| c.is_ascii_digit())
+    take_while(|c: I::Item| c.is_ascii_digit()).parse(input)
 }
 
 /// delimited requires that all three parsers pass, but it returns the value from the second

@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let field_parser = take_while(|c| c != ';' && c != '\n' && c != '\r');
     let line_parser = separated1(field_parser, char(';'));
-    let newline_parser = alt(char('\n'), char('\r'));
+    let newline_parser = or(char('\n'), char('\r'));
     let csv_parser = separated1(line_parser, newline_parser);
 
     let (_, rows) = csv_parser.parse(content.as_str())?;
@@ -86,9 +86,9 @@ fn parse_object<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
             char('{'),
             separated_into_map(
                 separated_pair(
-                    delimited(multispace0(), parse_string_inner, multispace0()),
+                    delimited(multispace0, parse_string_inner, multispace0),
                     char(':'),
-                    delimited(multispace0(), parse_json, multispace0()),
+                    delimited(multispace0, parse_json, multispace0),
                 ),
                 char(','),
                 8,
@@ -103,10 +103,7 @@ fn parse_array<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
     map(
         delimited(
             char('['),
-            separated(
-                parse_json,
-                delimited(multispace0(), char(','), multispace0()),
-            ),
+            separated(parse_json, delimited(multispace0, char(','), multispace0)),
             char(']'),
         ),
         |val| Node::Array(Rc::new(val)),
@@ -114,12 +111,12 @@ fn parse_array<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
 }
 
 fn parse_number<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    map(double(), |n| Node::Number(n))(data)
+    map(double, |n| Node::Number(n))(data)
 }
 
 fn parse_json<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
     delimited(
-        multispace0(),
+        multispace0,
         alt!(
             parse_string,
             parse_number,
@@ -128,7 +125,7 @@ fn parse_json<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
             parse_null,
             parse_boolean,
         ),
-        multispace0(),
+        multispace0,
     )(data)
 }
 
