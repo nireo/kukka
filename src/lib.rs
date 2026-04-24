@@ -1,8 +1,5 @@
-use std::fmt;
-use std::hash::Hash;
-
 use memchr::memchr;
-use rustc_hash::FxHashMap;
+use std::fmt;
 
 /// initial capacity for vectors to avoid reallocations
 const VECTOR_INITIAL_CAPACITY: usize = 10;
@@ -748,29 +745,29 @@ where
     }
 }
 
-/// separated_into_map is like separated, but it expects the first parser to return a tuple of key
-/// and value. The results are collected into a HashMap. If the same key is found
-/// multiple times, the last value is kept. The capacity_hint is used to initialize the
-/// HashMap with a certain capacity to avoid reallocations.
-pub fn separated_into_map<I, P1, P2, O, K, V>(
+/// separated_fold is like separated, but folds each parsed element into an accumulator.
+pub fn separated_fold<I, P1, P2, O1, O2, Init, Fold, Acc>(
     p1: P1,
     p2: P2,
-    capacity_hint: usize,
-) -> impl Fn(I) -> ParseResult<I, FxHashMap<K, V>>
+    init: Init,
+    fold: Fold,
+) -> impl Fn(I) -> ParseResult<I, Acc>
 where
     I: Input,
-    P1: Parser<I, (K, V)>,
-    P2: Parser<I, O>,
-    K: Hash + Eq,
+    P1: Parser<I, O1>,
+    P2: Parser<I, O2>,
+    Init: Fn() -> Acc,
+    Fold: Fn(Acc, O1) -> Acc,
 {
     move |mut input: I| {
-        let mut map = FxHashMap::with_capacity_and_hasher(capacity_hint, Default::default());
+        let mut acc = init();
+
         match p1.parse(input) {
-            Ok((rest, (key, value))) => {
-                map.insert(key, value);
+            Ok((rest, result)) => {
+                acc = fold(acc, result);
                 input = rest;
             }
-            Err(_) => return Ok((input, map)),
+            Err(_) => return Ok((input, acc)),
         }
 
         loop {
@@ -782,8 +779,8 @@ where
 
                     input = rest;
                     match p1.parse(input) {
-                        Ok((rest, (key, value))) => {
-                            map.insert(key, value);
+                        Ok((rest, result)) => {
+                            acc = fold(acc, result);
                             input = rest;
                         }
                         Err(_) => return Err(ParseError::ExpectedElementAfterSeparator),
@@ -792,7 +789,7 @@ where
                 Err(_) => break,
             }
         }
-        Ok((input, map))
+        Ok((input, acc))
     }
 }
 

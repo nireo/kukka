@@ -291,6 +291,26 @@ mod tests {
     }
 
     #[test]
+    fn test_separated_fold_collects_into_accumulator() {
+        let parser = separated_fold(
+            separated_pair(take_while(|c| c != '='), char('='), integer),
+            char(','),
+            std::collections::HashMap::new,
+            |mut map, (key, value)| {
+                map.insert(key, value);
+                map
+            },
+        );
+
+        let result = parser.parse("a=1,b=2 end");
+        let mut expected = std::collections::HashMap::new();
+        expected.insert("a", 1);
+        expected.insert("b", 2);
+
+        assert_eq!(result, Ok((" end", expected)));
+    }
+
+    #[test]
     fn test_multispace0() {
         let parser = multispace0;
         let result = parser.parse("   abc");

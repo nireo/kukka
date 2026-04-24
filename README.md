@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 ```rust
 use kukka::*;
-use rustc_hash::FxHashMap;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::{error::Error, fs};
 
@@ -55,7 +55,7 @@ enum Node<'a> {
     String(&'a str),
 
     // since we are using the hashmap the actual order of the objects is not preserved.
-    Object(Rc<FxHashMap<&'a str, Node<'a>>>),
+    Object(Rc<HashMap<&'a str, Node<'a>>>),
     Array(Rc<Vec<Node<'a>>>),
 }
 
@@ -84,14 +84,18 @@ fn parse_object<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
     map(
         delimited(
             char('{'),
-            separated_into_map(
+            separated_fold(
                 separated_pair(
                     delimited(multispace0, parse_string_inner, multispace0),
                     char(':'),
                     delimited(multispace0, parse_json, multispace0),
                 ),
                 char(','),
-                8,
+                HashMap::new,
+                |mut object, (key, value)| {
+                    object.insert(key, value);
+                    object
+                },
             ),
             char('}'),
         ),
