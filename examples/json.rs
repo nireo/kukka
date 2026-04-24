@@ -33,7 +33,7 @@ fn parse_string_inner<'a>(data: &'a str) -> StrResult<'a, &'a str> {
 }
 
 fn parse_string<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    map(parse_string_inner, |s| Node::String(s))(data)
+    parse_string_inner.map(Node::String).parse(data)
 }
 
 fn parse_object<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
@@ -67,22 +67,20 @@ fn parse_array<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
 }
 
 fn parse_number<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    map(double, |n| Node::Number(n))(data)
+    double.map(Node::Number).parse(data)
 }
 
 fn parse_json<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    delimited(
-        multispace0,
-        alt!(
-            parse_string,
-            parse_number,
-            parse_array,
-            parse_object,
-            parse_null,
-            parse_boolean,
-        ),
-        multispace0,
-    )(data)
+    alt!(
+        parse_string,
+        parse_number,
+        parse_array,
+        parse_object,
+        parse_null,
+        parse_boolean,
+    )
+    .delimited_by(multispace0, multispace0)
+    .parse(data)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

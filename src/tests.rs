@@ -326,6 +326,20 @@ mod tests {
     }
 
     #[test]
+    fn test_parser_ext_chaining() {
+        let parser = integer.map(|num| num * 2).and(multispace1).many1();
+        let result = parser.parse("1 2 3 end");
+        assert_eq!(result, Ok(("end", vec![(2, " "), (4, " "), (6, " ")])));
+    }
+
+    #[test]
+    fn test_parser_ext_delimited_by() {
+        let parser = char('a').delimited_by(char('('), char(')'));
+        let result = parser.parse("(a)rest");
+        assert_eq!(result, Ok(("rest", 'a')));
+    }
+
+    #[test]
     fn test_double() {
         let parser = double;
         let result = parser.parse("3.14xyz");
