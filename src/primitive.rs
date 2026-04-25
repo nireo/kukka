@@ -1,3 +1,5 @@
+use memchr::{memchr2, memchr3};
+
 use crate::{AsciiDigit, Input, ParseError, ParseResult, Parser};
 
 /// multispace0 matches zero or more whitespace characters (space, tab, newline, carriage return)
@@ -82,39 +84,41 @@ where
     }
 }
 
-/// take_until_any2 consumes input until either target item is found. The target item is not consumed.
-pub fn take_until_any2<I>(target1: I::Item, target2: I::Item) -> impl Fn(I) -> ParseResult<I, I>
+/// take_until_byte2 consumes input until either target byte is found. The target byte is not consumed.
+pub fn take_until_byte2<I: Input>(target1: u8, target2: u8) -> impl Fn(I) -> ParseResult<I, I>
 where
-    I: Input,
-    I::Item: PartialEq,
+    I::Slice: AsRef<[u8]>,
 {
     move |input: I| {
-        let end_pos = input
-            .find_item2(target1, target2)
-            .unwrap_or_else(|| input.len());
+        let end_pos =
+            memchr2(target1, target2, input.as_slice().as_ref()).unwrap_or_else(|| input.len());
 
-        let (matched, rest) = input.split_at(end_pos);
-        Ok((rest, matched))
+        if let Some((matched, rest)) = input.split_at_checked(end_pos) {
+            Ok((rest, matched))
+        } else {
+            Err(ParseError::InvalidTakeBoundary)
+        }
     }
 }
 
-/// take_until_any3 consumes input until any target item is found. The target item is not consumed.
-pub fn take_until_any3<I>(
-    target1: I::Item,
-    target2: I::Item,
-    target3: I::Item,
+/// take_until_byte3 consumes input until any target byte is found. The target byte is not consumed.
+pub fn take_until_byte3<I: Input>(
+    target1: u8,
+    target2: u8,
+    target3: u8,
 ) -> impl Fn(I) -> ParseResult<I, I>
 where
-    I: Input,
-    I::Item: PartialEq,
+    I::Slice: AsRef<[u8]>,
 {
     move |input: I| {
-        let end_pos = input
-            .find_item3(target1, target2, target3)
+        let end_pos = memchr3(target1, target2, target3, input.as_slice().as_ref())
             .unwrap_or_else(|| input.len());
 
-        let (matched, rest) = input.split_at(end_pos);
-        Ok((rest, matched))
+        if let Some((matched, rest)) = input.split_at_checked(end_pos) {
+            Ok((rest, matched))
+        } else {
+            Err(ParseError::InvalidTakeBoundary)
+        }
     }
 }
 
