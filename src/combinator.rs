@@ -389,16 +389,20 @@ macro_rules! alt {
 }
 
 /// fold_many0 applies a parser zero or more times and folds the results using the provided
-/// function and initial accumulator value
-pub fn fold_many0<I, P, O, F, Acc>(parser: P, init: Acc, f: F) -> impl Fn(I) -> ParseResult<I, Acc>
+/// function and accumulator initializer.
+pub fn fold_many0<I, P, O, Init, F, Acc>(
+    parser: P,
+    init: Init,
+    f: F,
+) -> impl Fn(I) -> ParseResult<I, Acc>
 where
     I: Input,
     P: Parser<I, O>,
+    Init: Fn() -> Acc,
     F: Fn(Acc, O) -> Acc,
-    Acc: Clone,
 {
     move |mut input: I| {
-        let mut acc = init.clone();
+        let mut acc = init();
 
         loop {
             match parser.parse(input) {
@@ -431,15 +435,19 @@ where
 }
 
 /// fold_many1 is like fold_many0, but requires at least one successful parse
-pub fn fold_many1<I, P, O, F, Acc>(parser: P, init: Acc, f: F) -> impl Fn(I) -> ParseResult<I, Acc>
+pub fn fold_many1<I, P, O, Init, F, Acc>(
+    parser: P,
+    init: Init,
+    f: F,
+) -> impl Fn(I) -> ParseResult<I, Acc>
 where
     I: Input,
     P: Parser<I, O>,
+    Init: Fn() -> Acc,
     F: Fn(Acc, O) -> Acc,
-    Acc: Clone,
 {
     move |mut input: I| {
-        let mut acc = init.clone();
+        let mut acc = init();
 
         match parser.parse(input) {
             Ok((rest, result)) => {

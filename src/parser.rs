@@ -109,20 +109,20 @@ pub trait ParserExt<I, Out>: Parser<I, Out> + Sized {
         peek(self)
     }
 
-    fn fold_many0<F, Acc>(self, init: Acc, f: F) -> impl Fn(I) -> ParseResult<I, Acc>
+    fn fold_many0<Init, F, Acc>(self, init: Init, f: F) -> impl Fn(I) -> ParseResult<I, Acc>
     where
         I: Input,
+        Init: Fn() -> Acc,
         F: Fn(Acc, Out) -> Acc,
-        Acc: Clone,
     {
         fold_many0(self, init, f)
     }
 
-    fn fold_many1<F, Acc>(self, init: Acc, f: F) -> impl Fn(I) -> ParseResult<I, Acc>
+    fn fold_many1<Init, F, Acc>(self, init: Init, f: F) -> impl Fn(I) -> ParseResult<I, Acc>
     where
         I: Input,
+        Init: Fn() -> Acc,
         F: Fn(Acc, Out) -> Acc,
-        Acc: Clone,
     {
         fold_many1(self, init, f)
     }
