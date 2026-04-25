@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let path = &args[1];
     let content = fs::read_to_string(path)?;
 
-    let field_parser = take_while(|c| c != ';' && c != '\n' && c != '\r');
+    let field_parser = take_until_any3(';', '\n', '\r');
     let line_parser = separated1(field_parser, char(';'));
     let newline_parser = or(char('\n'), char('\r'));
     let csv_parser = separated1(line_parser, newline_parser);

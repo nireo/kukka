@@ -82,6 +82,42 @@ where
     }
 }
 
+/// take_until_any2 consumes input until either target item is found. The target item is not consumed.
+pub fn take_until_any2<I>(target1: I::Item, target2: I::Item) -> impl Fn(I) -> ParseResult<I, I>
+where
+    I: Input,
+    I::Item: PartialEq,
+{
+    move |input: I| {
+        let end_pos = input
+            .find_item2(target1, target2)
+            .unwrap_or_else(|| input.len());
+
+        let (matched, rest) = input.split_at(end_pos);
+        Ok((rest, matched))
+    }
+}
+
+/// take_until_any3 consumes input until any target item is found. The target item is not consumed.
+pub fn take_until_any3<I>(
+    target1: I::Item,
+    target2: I::Item,
+    target3: I::Item,
+) -> impl Fn(I) -> ParseResult<I, I>
+where
+    I: Input,
+    I::Item: PartialEq,
+{
+    move |input: I| {
+        let end_pos = input
+            .find_item3(target1, target2, target3)
+            .unwrap_or_else(|| input.len());
+
+        let (matched, rest) = input.split_at(end_pos);
+        Ok((rest, matched))
+    }
+}
+
 /// char matches a specific item at the start of the input
 #[inline(always)]
 pub fn char<I>(expected: I::Item) -> impl Fn(I) -> ParseResult<I, I::Item>

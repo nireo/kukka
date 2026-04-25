@@ -386,6 +386,35 @@ mod tests {
     }
 
     #[test]
+    fn test_take_until_any2_stops_at_first_target() {
+        let parser = take_until_any2(',', ';');
+        let result = parser.parse("abc,def;ghi");
+        assert_eq!(result, Ok((",def;ghi", "abc")));
+    }
+
+    #[test]
+    fn test_take_until_any3_stops_at_first_target() {
+        let parser = take_until_any3(';', '\n', '\r');
+        let result = parser.parse("field\nnext");
+        assert_eq!(result, Ok(("\nnext", "field")));
+    }
+
+    #[test]
+    fn test_take_until_any3_bytes() {
+        let parser = take_until_any3(b';', b'\n', b'\r');
+        let input: &[u8] = b"field;next";
+        let result = parser.parse(input);
+        assert_eq!(result, Ok((&b";next"[..], &b"field"[..])));
+    }
+
+    #[test]
+    fn test_take_until_any3_non_ascii_fallback() {
+        let parser = take_until_any3('é', 'ö', 'å');
+        let result = parser.parse("abcödef");
+        assert_eq!(result, Ok(("ödef", "abc")));
+    }
+
+    #[test]
     fn test_map() {
         let parser = map(integer, |num| num * 2);
         let result = parser.parse("21abc");

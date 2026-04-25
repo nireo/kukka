@@ -1,4 +1,4 @@
-use memchr::memchr;
+use memchr::{memchr, memchr2, memchr3};
 
 /// Input is a lightweight abstraction over &str and &[u8].
 pub trait Input: Copy {
@@ -15,6 +15,8 @@ pub trait Input: Copy {
     fn item_len(item: Self::Item) -> usize;
     fn as_slice(self) -> Self::Slice;
     fn find_item(self, item: Self::Item) -> Option<usize>;
+    fn find_item2(self, item1: Self::Item, item2: Self::Item) -> Option<usize>;
+    fn find_item3(self, item1: Self::Item, item2: Self::Item, item3: Self::Item) -> Option<usize>;
 }
 
 impl<'a> Input for &'a str {
@@ -63,6 +65,26 @@ impl<'a> Input for &'a str {
                 .map(|(idx, _)| idx)
         }
     }
+
+    fn find_item2(self, item1: Self::Item, item2: Self::Item) -> Option<usize> {
+        if item1.is_ascii() && item2.is_ascii() {
+            memchr2(item1 as u8, item2 as u8, self.as_bytes())
+        } else {
+            self.char_indices()
+                .find(|(_, c)| *c == item1 || *c == item2)
+                .map(|(idx, _)| idx)
+        }
+    }
+
+    fn find_item3(self, item1: Self::Item, item2: Self::Item, item3: Self::Item) -> Option<usize> {
+        if item1.is_ascii() && item2.is_ascii() && item3.is_ascii() {
+            memchr3(item1 as u8, item2 as u8, item3 as u8, self.as_bytes())
+        } else {
+            self.char_indices()
+                .find(|(_, c)| *c == item1 || *c == item2 || *c == item3)
+                .map(|(idx, _)| idx)
+        }
+    }
 }
 
 impl<'a> Input for &'a [u8] {
@@ -104,6 +126,14 @@ impl<'a> Input for &'a [u8] {
 
     fn find_item(self, item: Self::Item) -> Option<usize> {
         memchr(item, self)
+    }
+
+    fn find_item2(self, item1: Self::Item, item2: Self::Item) -> Option<usize> {
+        memchr2(item1, item2, self)
+    }
+
+    fn find_item3(self, item1: Self::Item, item2: Self::Item, item3: Self::Item) -> Option<usize> {
+        memchr3(item1, item2, item3, self)
     }
 }
 
