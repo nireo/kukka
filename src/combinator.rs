@@ -71,25 +71,14 @@ where
     I: Input,
     P: Parser<I, O>,
 {
-    move |mut input: I| {
-        let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
-
-        loop {
-            match parser.parse(input) {
-                Ok((rest, result)) => {
-                    if !parser_made_progress(input, rest) {
-                        return Err(ParseError::NoProgress);
-                    }
-
-                    res.push(result);
-                    input = rest;
-                }
-                Err(_) => break,
-            }
-        }
-
-        Ok((input, res))
-    }
+    fold_many0(
+        parser,
+        || Vec::with_capacity(VECTOR_INITIAL_CAPACITY),
+        |mut values, value| {
+            values.push(value);
+            values
+        },
+    )
 }
 
 /// map applies a function to the output of a parser
@@ -113,36 +102,14 @@ where
     I: Input,
     P: Parser<I, O>,
 {
-    move |mut input: I| {
-        let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
-        match parser.parse(input) {
-            Ok((rest, result)) => {
-                if !parser_made_progress(input, rest) {
-                    return Err(ParseError::NoProgress);
-                }
-
-                res.push(result);
-                input = rest;
-
-                loop {
-                    match parser.parse(input) {
-                        Ok((rest, result)) => {
-                            if !parser_made_progress(input, rest) {
-                                return Err(ParseError::NoProgress);
-                            }
-
-                            res.push(result);
-                            input = rest;
-                        }
-                        Err(_) => break,
-                    }
-                }
-
-                Ok((input, res))
-            }
-            Err(_) => Err(ParseError::ExpectedAtLeastOne),
-        }
-    }
+    fold_many1(
+        parser,
+        || Vec::with_capacity(VECTOR_INITIAL_CAPACITY),
+        |mut values, value| {
+            values.push(value);
+            values
+        },
+    )
 }
 
 /// separated applies two parsers in sequence, where the second parser is a separator. The results
@@ -155,44 +122,15 @@ where
     P1: Parser<I, O1>,
     P2: Parser<I, O2>,
 {
-    move |mut input: I| {
-        let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
-
-        match p1.parse(input) {
-            Ok((rest, result)) => {
-                res.push(result);
-                input = rest;
-            }
-            Err(_) => {
-                return Ok((input, res));
-            }
-        }
-
-        loop {
-            match p2.parse(input) {
-                Ok((rest, _)) => {
-                    if !parser_made_progress(input, rest) {
-                        break;
-                    }
-
-                    input = rest;
-                    match p1.parse(input) {
-                        Ok((rest, result)) => {
-                            res.push(result);
-                            input = rest;
-                        }
-                        Err(_) => {
-                            return Err(ParseError::ExpectedElementAfterSeparator);
-                        }
-                    }
-                }
-                Err(_) => {
-                    break;
-                }
-            }
-        }
-        Ok((input, res))
-    }
+    separated_fold(
+        p1,
+        p2,
+        || Vec::with_capacity(VECTOR_INITIAL_CAPACITY),
+        |mut values, value| {
+            values.push(value);
+            values
+        },
+    )
 }
 
 /// delimited requires that all three parsers pass, but it returns the value from the second
@@ -337,35 +275,15 @@ where
     P1: Parser<I, O1>,
     P2: Parser<I, O2>,
 {
-    move |mut input: I| {
-        let mut res = Vec::with_capacity(VECTOR_INITIAL_CAPACITY);
-        let (rest, result) = p1.parse(input)?;
-        res.push(result);
-        input = rest;
-
-        loop {
-            match p2.parse(input) {
-                Ok((rest, _)) => {
-                    if !parser_made_progress(input, rest) {
-                        break;
-                    }
-
-                    input = rest;
-                    match p1.parse(input) {
-                        Ok((rest, result)) => {
-                            res.push(result);
-                            input = rest;
-                        }
-                        Err(_) => {
-                            return Err(ParseError::ExpectedElementAfterSeparator);
-                        }
-                    }
-                }
-                Err(_) => break,
-            }
-        }
-        Ok((input, res))
-    }
+    separated1_fold(
+        p1,
+        p2,
+        || Vec::with_capacity(VECTOR_INITIAL_CAPACITY),
+        |mut values, value| {
+            values.push(value);
+            values
+        },
+    )
 }
 
 #[macro_export]
