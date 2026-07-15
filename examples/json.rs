@@ -1,6 +1,5 @@
 use kukka::*;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::{error::Error, fs};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -11,8 +10,8 @@ enum Node<'a> {
     String(&'a str),
 
     // since we are using the hashmap the actual order of the objects is not preserved.
-    Object(Rc<HashMap<&'a str, Node<'a>>>),
-    Array(Rc<Vec<Node<'a>>>),
+    Object(HashMap<&'a str, Node<'a>>),
+    Array(Vec<Node<'a>>),
 }
 
 type StrResult<'a, T> = ParseResult<&'a str, T>;
@@ -55,7 +54,7 @@ fn parse_object<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
             ),
             char('}'),
         ),
-        |v| Node::Object(Rc::new(v)),
+        Node::Object,
     )(json)
 }
 
@@ -66,7 +65,7 @@ fn parse_array<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
             separated(parse_json, delimited(multispace0, char(','), multispace0)),
             char(']'),
         ),
-        |val| Node::Array(Rc::new(val)),
+        Node::Array,
     )(json)
 }
 

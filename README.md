@@ -4,146 +4,75 @@ Kukka is a small parser combinator library for Rust. It is inspired by `nom`, bu
 
 ## Examples
 
-### CSV parser
+Every parser takes an input and returns the unconsumed input together with its output. Parsers can
+be composed using free functions:
 
 ```rust
-// This example is still very simplistic and doesn't validate for example that the lines
-// are the correct length.
 use kukka::*;
-use std::{error::Error, fs};
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let args: Vec<String> = std::env::args().collect();
+fn main() -> Result<(), ParseError> {
+    let identifier = take_while1(|c: char| c.is_ascii_alphabetic() || c == '_');
+    let equals = delimited(multispace0, char('='), multispace0);
+    let assignment = separated_pair(identifier, equals, integer);
 
-    if args.len() <= 1 {
-        println!("provide the file path to the csv file");
-        return Ok(());
-    }
-
-    let path = &args[1];
-    let content = fs::read_to_string(path)?;
-
-    let field_parser = take_until_byte3(b';', b'\n', b'\r');
-    let line_parser = separated1(field_parser, char(';'));
-    let newline_parser = or(char('\n'), char('\r'));
-    let csv_parser = separated1(line_parser, newline_parser);
-
-    let (_, rows) = csv_parser.parse(content.as_str())?;
-    for row in rows {
-        for field in row {
-            print!("{} ", field);
-        }
-        println!("");
-    }
+    let (rest, (name, value)) = assignment.parse("retries = -3;")?;
+    assert_eq!(rest, ";");
+    assert_eq!((name, value), ("retries", -3));
     Ok(())
 }
 ```
 
-### JSON parser
+The same combinators are available as extension methods for fluent composition:
 
 ```rust
 use kukka::*;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::{error::Error, fs};
 
-#[derive(Clone, Debug, PartialEq)]
-enum Node<'a> {
-    Null,
-    Boolean(bool),
-    Number(f64),
-    String(&'a str),
+let number = integer.delimited_by(multispace0, multispace0);
+let numbers = number.separated1(char(','));
 
-    // since we are using the hashmap the actual order of the objects is not preserved.
-    Object(Rc<HashMap<&'a str, Node<'a>>>),
-    Array(Rc<Vec<Node<'a>>>),
-}
+assert_eq!(
+    numbers.parse("1, -2, 3 rest"),
+    Ok(("rest", vec![1, -2, 3])),
+);
+```
 
-type StrResult<'a, T> = ParseResult<&'a str, T>;
+Alternatives, mapping, and repeated parsing can be combined without introducing a custom parser
+type:
 
-fn parse_boolean<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    or(
-        value(string("true"), || Node::Boolean(true)),
-        value(string("false"), || Node::Boolean(false)),
-    )(data)
-}
+```rust
+use kukka::*;
 
-fn parse_null<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    value(string("null"), || Node::Null)(data)
-}
+let boolean = alt!(
+    value(string("true"), || true),
+    value(string("false"), || false),
+);
+let booleans = boolean.separated1(char(','));
 
-fn parse_string_inner<'a>(data: &'a str) -> StrResult<'a, &'a str> {
-    delimited(char('"'), take_while(|c| c != '"'), char('"'))(data)
-}
+assert_eq!(
+    booleans.parse("true,false,true!"),
+    Ok(("!", vec![true, false, true])),
+);
+```
 
-fn parse_string<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    parse_string_inner.map(Node::String).parse(data)
-}
+Most primitives work with both `&str` and `&[u8]` input:
 
-fn parse_object<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
-    map(
-        delimited(
-            char('{'),
-            separated_fold(
-                separated_pair(
-                    delimited(multispace0, parse_string_inner, multispace0),
-                    char(':'),
-                    delimited(multispace0, parse_json, multispace0),
-                ),
-                char(','),
-                HashMap::new,
-                |mut object, (key, value)| {
-                    object.insert(key, value);
-                    object
-                },
-            ),
-            char('}'),
-        ),
-        |v| Node::Object(Rc::new(v)),
-    )(json)
-}
+```rust
+use kukka::*;
 
-fn parse_array<'a>(json: &'a str) -> StrResult<'a, Node<'a>> {
-    map(
-        delimited(
-            char('['),
-            separated(parse_json, delimited(multispace0, char(','), multispace0)),
-            char(']'),
-        ),
-        |val| Node::Array(Rc::new(val)),
-    )(json)
-}
+assert_eq!(char('k').parse("kukka"), Ok(("ukka", 'k')));
+assert_eq!(
+    string(&b"GET"[..]).parse(&b"GET /index.html"[..]),
+    Ok((&b" /index.html"[..], &b"GET"[..])),
+);
+```
 
-fn parse_number<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    double.map(Node::Number).parse(data)
-}
+For larger examples, see the complete executable parsers:
 
-fn parse_json<'a>(data: &'a str) -> StrResult<'a, Node<'a>> {
-    alt!(
-        parse_string,
-        parse_number,
-        parse_array,
-        parse_object,
-        parse_null,
-        parse_boolean,
-    )
-    .delimited_by(multispace0, multispace0)
-    .parse(data)
-}
+- [CSV parser](examples/csv.rs)
+- [JSON parser](examples/json.rs)
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let args: Vec<String> = std::env::args().collect();
+Run one with:
 
-    if args.len() <= 1 {
-        println!("provide the file path to the csv file");
-        return Ok(());
-    }
-
-    let path = &args[1];
-    let content = fs::read_to_string(path)?;
-    let data = parse_json(&content)?;
-    println!("{:?}", data);
-
-    Ok(())
-}
+```sh
+cargo run --example json -- path/to/file.json
 ```

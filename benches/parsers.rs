@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use kukka::*;
@@ -100,6 +100,42 @@ fn bench_separated_fold(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_vector_initialization(c: &mut Criterion) {
+    let mut group = c.benchmark_group("vector initialization");
+    group.warm_up_time(Duration::from_secs(1));
+    group.measurement_time(Duration::from_secs(2));
+
+    for count in [0, 1, 4, 10] {
+        let input = "a".repeat(count);
+
+        group.bench_with_input(BenchmarkId::new("Vec::new", count), &input, |b, input| {
+            let parser = fold_many0(char('a'), Vec::new, |mut values: Vec<char>, value| {
+                values.push(value);
+                values
+            });
+            b.iter(|| black_box(parser.parse(black_box(input.as_str()))))
+        });
+
+        group.bench_with_input(
+            BenchmarkId::new("Vec::with_capacity(10)", count),
+            &input,
+            |b, input| {
+                let parser = fold_many0(
+                    char('a'),
+                    || Vec::with_capacity(10),
+                    |mut values: Vec<char>, value| {
+                        values.push(value);
+                        values
+                    },
+                );
+                b.iter(|| black_box(parser.parse(black_box(input.as_str()))))
+            },
+        );
+    }
+
+    group.finish();
+}
+
 fn bench_chaining(c: &mut Criterion) {
     let input = comma_separated_numbers(1_000);
     let mut group = c.benchmark_group("chaining");
@@ -123,6 +159,7 @@ criterion_group!(
     bench_primitives,
     bench_separated_integers,
     bench_separated_fold,
+    bench_vector_initialization,
     bench_chaining,
 );
 criterion_main!(benches);
