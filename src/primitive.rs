@@ -158,7 +158,8 @@ where
     }
 }
 
-pub fn digit01<I>(input: I) -> ParseResult<I, I>
+/// digit0 matches zero or more ASCII digits.
+pub fn digit0<I>(input: I) -> ParseResult<I, I>
 where
     I: Input,
     I::Item: AsciiDigit,

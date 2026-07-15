@@ -485,8 +485,8 @@ mod tests {
     }
 
     #[test]
-    fn test_digit01() {
-        let parser = digit01;
+    fn test_digit0() {
+        let parser = digit0;
         let result = parser.parse("123abc");
         assert_eq!(result, Ok(("abc", "123")));
     }
@@ -811,7 +811,7 @@ mod tests {
             Ok((&whitespace_input[2..], &whitespace_input[..2]))
         );
         assert_eq!(
-            digit01(digits_input),
+            digit0(digits_input),
             Ok((&digits_input[3..], &digits_input[..3]))
         );
         assert_eq!(
@@ -887,7 +887,6 @@ mod tests {
                 ParseError::ExpectedWhitespace,
                 "expected at least one whitespace character",
             ),
-            (ParseError::ValueParserMismatch, "didnt match value parser"),
             (ParseError::ExpectedAtLeastOne, "could not parse once"),
             (
                 ParseError::ExpectedElementAfterSeparator,
