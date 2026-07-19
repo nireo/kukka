@@ -1,6 +1,14 @@
 # kukka: a small parser combinator library
 
-Kukka is a small parser combinator library for Rust. It is inspired by `nom`, but tries to be very simple. I think the library code is good if one wants to learn how parser combinators work. 
+> kukka stands for flower in Finnish
+
+Kukka is a small parser combinator library for Rust. It is inspired by `nom`, but tries to be very simple. I think the library code is good if one wants to learn how parser combinators work. Excluding tests the library is just below 1k lines, so going through the code will not take too much time. However, currently the inlining of certain parsers is not properly tested/benchmarked rather the logic is just keeping small and common parsers inlined.
+
+The under 1k lines should be taken with a grain of salt as this code can ultimately be made a lot shorter as this contains some methods that are generally convenience methods. They are just to show that ultimately the primitives that a parser combinator library can be very flexible but not that ergonomic. For example:
+- `digit0` could be written as `take_while(|c| c.is_ascii_digit())`
+- `value(parser, make_value)` could be written as `map(parser, |_| make_value())`
+- `many` and `many1` are `fold_many0` and `fold_many1` configured to collect into a `Vec`
+- `separated` and `separated1` are `separated_fold` and `separated1_fold` configured to collect into a `Vec`
 
 ## Examples
 
@@ -22,7 +30,7 @@ fn main() -> Result<(), ParseError> {
 }
 ```
 
-The same combinators are available as extension methods for fluent composition:
+The main idea behind parser combinators is that we can combine different parses together:
 
 ```rust
 use kukka::*;
